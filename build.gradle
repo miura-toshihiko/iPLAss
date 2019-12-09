@@ -1,10 +1,14 @@
 
 ext.localLibDir = file(localLibDirPath)
+ext.javaVersion = "${javaVersion}"
 
 allprojects {
 	apply plugin: 'java'
 
 	group "org.iplass"
+
+	sourceCompatibility = javaVersion
+	targetCompatibility = javaVersion
 
 	repositories {
 		mavenCentral()
