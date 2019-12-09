@@ -20,6 +20,8 @@
 
 package org.iplass.mtp.impl.auth.authenticate.builtin;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.util.ArrayList;
@@ -173,6 +175,10 @@ public class BuiltinAuthenticationProvider extends AuthenticationProviderBase {
 			return null;
 //			throw new SystemException("BuiltinAuthenticationProvider supports IdPasswordCredential");
 		}
+		
+		if (accountId == null || accountId.isEmpty()) {
+			return null;
+		}
 
 		int tenantId = getTenantId();
 
@@ -261,6 +267,15 @@ public class BuiltinAuthenticationProvider extends AuthenticationProviderBase {
 		if (passwordHashSettings == null) {
 			throw new ServiceConfigrationException("passwordHashSettings must specified.");
 		}
+		//check hash alg
+		for (PasswordHashSetting phs: passwordHashSettings) {
+			try {
+				MessageDigest.getInstance(phs.getPasswordHashAlgorithm());
+			} catch (NoSuchAlgorithmException e) {
+				throw new ServiceConfigrationException("invalid PasswordHashAlgorithm", e);
+			}
+		}
+		
 	}
 
 	@Override

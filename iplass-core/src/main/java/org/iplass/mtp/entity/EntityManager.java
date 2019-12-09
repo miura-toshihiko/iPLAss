@@ -20,6 +20,7 @@
 
 package org.iplass.mtp.entity;
 
+import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.sql.Timestamp;
@@ -332,6 +333,20 @@ public interface EntityManager extends Manager {
 	 * @return
 	 */
 	public BinaryReference createBinaryReference(String name, String type, InputStream is);
+	
+	/**
+	 * BinaryReferenceを新規に作成します。
+	 * 引数のfileのデータを同時にバイナリデータとして書き込みます。<br>
+	 * 作成されたBinaryReferenceはまだEntityに紐付いていない状態です。<br>
+	 * nameが未指定の場合は、fileの名前がnameに指定されます。
+	 * typeが未指定の場合は、fileの拡張子からmimetypeが解決されます。
+	 * 
+	 * @param file 
+	 * @param name
+	 * @param type
+	 * @return
+	 */
+	public BinaryReference createBinaryReference(File file, String name, String type);
 
 	/**
 	 * 引数で指定されたBinaryReferenceのバイナリデータを取得するためのInputStreamを取得します。
@@ -459,4 +474,14 @@ public interface EntityManager extends Manager {
 	 * @return 検索キーワードを含むエンティティデータのリスト
 	 */
 	public <T extends Entity> SearchResult<T> fulltextSearchEntity(Map<String, List<String>> entityProperties, String keyword);
+
+	/**
+	 * クエリ実行結果に対して、指定のワードで全文検索します。
+	 *<pre><b>メモリを大量消費する恐れがありますので、絞り込む条件とリミット条件を指定した上でご利用してください。</b></pre>
+	 *
+	 * @param Query クエリ、Entity.OIDを検索項目として設定する必要が有ります。 <pre>Entity.OIDを指定しないと、空のリストが返されます。</pre> 
+	 * @param keyword 全文検索用キーワード
+	 * @return SearchOption 検索時のオプション、countTotal=trueの場合総件数を積み上げる
+	 */
+	public <T extends Entity> SearchResult<T> fulltextSearchEntity(Query query, String keyword, SearchOption option);
 }

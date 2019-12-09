@@ -67,10 +67,13 @@ public class ActionEditPane extends MetaDataMainEditPane {
 	/** ヘッダ部分 */
 	private MetaCommonHeaderPane headerPane;
 	/** 共通属性部分 */
-	private MetaCommonAttributeSection commonSection;
+	private MetaCommonAttributeSection<ActionMappingDefinition> commonSection;
 
 	/** Action属性部分 */
 	private ActionAttributePane actionAttributePane;
+
+	/** RestrictionRequest属性部分 */
+	private RestrictionRequestAttributePane restrictionRequestAttributePane;
 
 	/** CommandConfig部分 */
 	private CommandConfigGridPane commandConfigPane;
@@ -105,10 +108,13 @@ public class ActionEditPane extends MetaDataMainEditPane {
 		});
 
 		//共通属性
-		commonSection = new MetaCommonAttributeSection(targetNode, ActionMappingDefinition.class, true);
+		commonSection = new MetaCommonAttributeSection<>(targetNode, ActionMappingDefinition.class, true);
 
 		//Action編集部分
 		actionAttributePane = new ActionAttributePane();
+
+		//RestrictionRequest属性部分
+		restrictionRequestAttributePane = new RestrictionRequestAttributePane();
 
 		//CommandConfig編集部分
 		commandConfigPane = new CommandConfigGridPane();
@@ -120,7 +126,8 @@ public class ActionEditPane extends MetaDataMainEditPane {
 		resultPane = new ResultGridPane();
 
 		//Section設定
-		MetaDataSectionStackSection actionSection = createSection("Action Attribute", actionAttributePane, paramMapPane, commandConfigPane, resultPane);
+		MetaDataSectionStackSection actionSection = createSection("Action Attribute",
+				actionAttributePane, restrictionRequestAttributePane, paramMapPane, commandConfigPane, resultPane);
 
 		//Drop設定
 		new AbstractMetaDataDropHandler() {
@@ -148,7 +155,7 @@ public class ActionEditPane extends MetaDataMainEditPane {
 
 
 		//CacheCriteria部分
-		cacheCriteriaPane = new CacheCriteriaPane();
+		cacheCriteriaPane = new CacheCriteriaPane(this);
 
 		//Section設定
 		SectionStackSection serverCacheSection = createSection("Server Cache Criteria", false, cacheCriteriaPane);
@@ -201,17 +208,18 @@ public class ActionEditPane extends MetaDataMainEditPane {
 		this.curVersion = entry.getDefinitionInfo().getVersion();
 		this.curDefinitionId = entry.getDefinitionInfo().getObjDefId();
 
-		//共通属性
-		commonSection.setName(curDefinition.getName());
-		commonSection.setDisplayName(curDefinition.getDisplayName());
+		commonSection.setDefinition(curDefinition);
 		commonSection.setLocalizedDisplayNameList(curDefinition.getLocalizedDisplayNameList());
-		commonSection.setDescription(curDefinition.getDescription());
-
 		actionAttributePane.setDefinition(curDefinition);
+		restrictionRequestAttributePane.setDefinition(curDefinition);
 		commandConfigPane.setConfig(curDefinition.getCommandConfig());
 		paramMapPane.setParamMap(curDefinition.getParamMap());
 		resultPane.setResults(curDefinition.getResult());
 		cacheCriteriaPane.setCacheCriteria(curDefinition.getCacheCriteria());
+	}
+
+	public String getActionName() {
+		return this.defName;
 	}
 
 	/**
@@ -272,11 +280,13 @@ public class ActionEditPane extends MetaDataMainEditPane {
 		public void onClick(ClickEvent event) {
 			boolean commonValidate = commonSection.validate();
 			boolean attrValidate = actionAttributePane.validate();
+			boolean restrictionValidate = restrictionRequestAttributePane.validate();
 			boolean commandValidate = commandConfigPane.validate();
 			boolean paramMapValidate = paramMapPane.validate();
 			boolean resultValidate = resultPane.validate();
 			boolean cacheCriteriaValidate = cacheCriteriaPane.validate();
-			if (!commonValidate || !attrValidate || !commandValidate || !paramMapValidate || !resultValidate || !cacheCriteriaValidate) {
+			if (!commonValidate || !attrValidate || !restrictionValidate
+					|| !commandValidate || !paramMapValidate || !resultValidate || !cacheCriteriaValidate) {
 				return;
 			}
 
@@ -288,12 +298,10 @@ public class ActionEditPane extends MetaDataMainEditPane {
 					if (value) {
 						ActionMappingDefinition definition = new ActionMappingDefinition();
 
-						definition.setName(commonSection.getName());
-						definition.setDisplayName(commonSection.getDisplayName());
+						definition = commonSection.getEditDefinition(definition);
 						definition.setLocalizedDisplayNameList(commonSection.getLocalizedDisplayNameList());
-						definition.setDescription(commonSection.getDescription());
-
 						definition = actionAttributePane.getEditDefinition(definition);
+						definition = restrictionRequestAttributePane.getEditDefinition(definition);
 						definition.setCommandConfig(commandConfigPane.getEditCommandConfig());
 						definition = paramMapPane.getEditDefinition(definition);
 						definition = resultPane.getEditDefinition(definition);

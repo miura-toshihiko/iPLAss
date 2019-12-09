@@ -92,6 +92,9 @@
 	request.setAttribute(Constants.DEF_NAME, defName);
 	request.setAttribute(Constants.ROOT_DEF_NAME, defName);	//NestTableの場合にDEF_NAMEが置き換わるので別名でRootのDefNameをセット
 
+	//editor以下で参照するパラメータ
+	request.setAttribute(Constants.VIEW_NAME, viewName);
+
 	String className = defName.replaceAll("\\.", "_");
 %>
 <div class="generic_search s_<c:out value="<%=className%>"/>">
@@ -121,7 +124,8 @@
 </h2>
 <%
 	Section topSection1 = view.getTopSection1();
-	if (topSection1 != null && topSection1.isDispFlag()) {
+	if (topSection1 != null
+			&& EntityViewUtil.isDisplayElement(defName, topSection1.getElementRuntimeId(), OutputType.SEARCHCONDITION)) {
 		request.setAttribute(Constants.ELEMENT, topSection1);
 		String topPath1 = EntityViewUtil.getJspPath(topSection1, ViewConst.DESIGN_TYPE_GEM);
 %>
@@ -158,8 +162,8 @@ function submitCsvupload(action) {
 	}
 	if (view.getButtons().size() > 0) {
 		for (Button button : view.getButtons()) {
-			if (button.isDispFlag()) {
-				String cssClass = "gr-btn gr-size-02 mb10";
+			if (EntityViewUtil.isDisplayElement(defName, button.getElementRuntimeId(), OutputType.SEARCHCONDITION)) {
+				String cssClass = (button.isPrimary() ? "gr-btn" : "gr-btn-02") + " gr-size-02 mb10";
 				if (StringUtil.isNotBlank(button.getStyle())) {
 					cssClass = button.getStyle();
 				}
@@ -180,7 +184,8 @@ function submitCsvupload(action) {
 </p>
 <%
 	Section topSection2 = view.getTopSection2();
-	if (topSection2 != null && topSection2.isDispFlag()) {
+	if (topSection2 != null
+			&& EntityViewUtil.isDisplayElement(defName, topSection2.getElementRuntimeId(), OutputType.SEARCHCONDITION)) {
 		request.setAttribute(Constants.ELEMENT, topSection2);
 		String topPath2 = EntityViewUtil.getJspPath(topSection2, ViewConst.DESIGN_TYPE_GEM);
 %>
@@ -200,7 +205,8 @@ function submitCsvupload(action) {
 	}
 
 	Section centerSection = view.getCenterSection();
-	if (centerSection != null && centerSection.isDispFlag()) {
+	if (centerSection != null
+			&& EntityViewUtil.isDisplayElement(defName, centerSection.getElementRuntimeId(), OutputType.SEARCHCONDITION)) {
 		request.setAttribute(Constants.ELEMENT, centerSection);
 		String centerPath = EntityViewUtil.getJspPath(centerSection, ViewConst.DESIGN_TYPE_GEM);
 %>
@@ -220,7 +226,8 @@ function submitCsvupload(action) {
 	}
 
 	Section bottomSection = view.getBottomSection();
-	if (bottomSection != null && bottomSection.isDispFlag()) {
+	if (bottomSection != null
+			&& EntityViewUtil.isDisplayElement(defName, bottomSection.getElementRuntimeId(), OutputType.SEARCHCONDITION)) {
 		request.setAttribute(Constants.ELEMENT, bottomSection);
 		String bottomPath = EntityViewUtil.getJspPath(bottomSection, ViewConst.DESIGN_TYPE_GEM);
 %>

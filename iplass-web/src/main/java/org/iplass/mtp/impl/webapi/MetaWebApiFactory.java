@@ -26,10 +26,12 @@ import java.util.Map;
 import org.iplass.mtp.command.Command;
 import org.iplass.mtp.command.annotation.CommandClass;
 import org.iplass.mtp.command.annotation.webapi.WebApi;
+import org.iplass.mtp.command.annotation.webapi.WebApiParamMapping;
 import org.iplass.mtp.impl.command.MetaCommand;
 import org.iplass.mtp.impl.command.MetaCommandFactory;
 import org.iplass.mtp.impl.metadata.annotation.AnnotatableMetaDataFactory;
 import org.iplass.mtp.impl.metadata.annotation.AnnotateMetaDataEntry;
+import org.iplass.mtp.webapi.definition.CacheControlType;
 
 
 public class MetaWebApiFactory implements AnnotatableMetaDataFactory<WebApi, Command> {
@@ -107,15 +109,56 @@ public class MetaWebApiFactory implements AnnotatableMetaDataFactory<WebApi, Com
 			}
 		}
 
+		if (webapi.cacheControlType() != null) {
+			switch (webapi.cacheControlType()) {
+				case CACHE:
+					meta.setCacheControlType(CacheControlType.CACHE);
+					break;
+				case NO_CACHE:
+					meta.setCacheControlType(CacheControlType.NO_CACHE);
+					break;
+				default:
+					break;
+			}
+		}
+		meta.setCacheControlMaxAge(webapi.cacheControlMaxAge());
+
 		meta.setAccepts(webapi.accepts());
 		meta.setMethods(webapi.methods());
+		if (webapi.allowRequestContentTypes().length > 0) {
+			String[] allowRequestContentTypes = new String[webapi.allowRequestContentTypes().length];
+			System.arraycopy(webapi.allowRequestContentTypes(), 0, allowRequestContentTypes, 0, allowRequestContentTypes.length);
+			meta.setAllowRequestContentTypes(allowRequestContentTypes);
+		}
+		if (webapi.maxRequestBodySize() != Long.MIN_VALUE) {
+			meta.setMaxRequestBodySize(webapi.maxRequestBodySize());
+		}
+		if (webapi.maxFileSize() != Long.MIN_VALUE) {
+			meta.setMaxFileSize(webapi.maxFileSize());
+		}
+
 		meta.setResults(webapi.results());
 		meta.setState(webapi.state());
 		meta.setSupportBearerToken(webapi.supportBearerToken());
+		if (webapi.oauthScopes() != null && webapi.oauthScopes().length > 0) {
+			meta.setOauthScopes(webapi.oauthScopes());
+		}
 		meta.setPrivilaged(webapi.privilaged());
 		meta.setPublicWebApi(webapi.publicWebApi());
 		meta.setCheckXRequestedWithHeader(webapi.checkXRequestedWithHeader());
 		meta.setResponseType(webapi.responseType());
+
+		if (webapi.paramMapping().length > 0) {
+			MetaWebApiParamMap[] paramMap = new MetaWebApiParamMap[webapi.paramMapping().length];
+			for (int i = 0; i < paramMap.length; i++) {
+				WebApiParamMapping anoParamMap = webapi.paramMapping()[i];
+				paramMap[i] = new MetaWebApiParamMap(anoParamMap.name(), anoParamMap.mapFrom());
+				if (!DEFAULT.equals(anoParamMap.condition())) {
+					paramMap[i].setCondition(anoParamMap.condition());
+				}
+			}
+			meta.setWebApiParamMap(paramMap);
+		}
 
 		//ValidateToken設定(ActionMappingからチェック)
 		if (webapi.tokenCheck().executeCheck()) {

@@ -72,6 +72,9 @@ public class GemConfigService implements Service {
 	/** 検索画面でリセットボタンを表示するか */
 	private boolean showSeachCondResetButton;
 
+	/** 検索画面で表示する検索結果の件数*/
+	private int searchResultDispRowCount;
+
 	/** 検索処理のインターバル */
 	private int searchInterval;
 
@@ -89,6 +92,13 @@ public class GemConfigService implements Service {
 
 	/** ゴミ箱の表示件数上限 */
 	private int recycleBinMaxCount;
+
+	/** 一括削除のコミット件数 */
+	private int deleteAllCommandBatchSize;
+
+	/** 一括更新のコミット件数 */
+	private int bulkUpdateAllCommandBatchSize;
+
 
 	private List<BinaryDownloadLoggingTargetProperty> binaryDownloadLoggingTargetProperty;
 
@@ -168,6 +178,13 @@ public class GemConfigService implements Service {
 
 		showSeachCondResetButton = Boolean.valueOf(config.getValue("showSeachCondResetButton"));
 
+		String searchResultDispRowCount = config.getValue("searchResultDispRowCount");
+		if (searchResultDispRowCount != null) {
+			this.searchResultDispRowCount = Integer.parseInt(searchResultDispRowCount);
+		} else {
+			this.searchResultDispRowCount = 10;
+		}
+
 		String searchInterval = config.getValue("searchInterval");
 		if (searchInterval != null) {
 			this.searchInterval = Integer.parseInt(searchInterval);
@@ -203,6 +220,21 @@ public class GemConfigService implements Service {
 		} else {
 			this.recycleBinMaxCount = 100;
 		}
+
+		String deleteAllCommandBatchSize = config.getValue("deleteAllCommandBatchSize");
+		if (deleteAllCommandBatchSize != null){
+			this.deleteAllCommandBatchSize = Integer.parseInt(deleteAllCommandBatchSize);
+		} else {
+			this.deleteAllCommandBatchSize = 100;
+		}
+
+		String bulkUpdateAllCommandBatchSize = config.getValue("bulkUpdateAllCommandBatchSize");
+		if (bulkUpdateAllCommandBatchSize != null){
+			this.bulkUpdateAllCommandBatchSize = Integer.parseInt(bulkUpdateAllCommandBatchSize);
+		} else {
+			this.bulkUpdateAllCommandBatchSize = 100;
+		}
+
 
 		skins = (List<Skin>) config.getBeans("skins");
 		themes = (List<Theme>) config.getBeans("themes");
@@ -311,6 +343,14 @@ public class GemConfigService implements Service {
 	}
 
 	/**
+	 * 検索画面で表示する検索結果の件数を取得します。
+	 * @return 検索画面で表示する検索結果の件数
+	 */
+	public int getSearchResultDispRowCount() {
+		return searchResultDispRowCount;
+	}
+
+	/**
 	 * 検索処理のインターバルを取得します。
 	 * @return 検索処理のインターバル
 	 */
@@ -403,4 +443,21 @@ public class GemConfigService implements Service {
 	public int getRecycleBinMaxCount() {
 		return recycleBinMaxCount;
 	}
+
+	/**
+	 * 一括削除のコミット件数を取得します。
+	 * @return 一括削除のコミット件数
+	 */
+	public int getDeleteAllCommandBatchSize() {
+		return deleteAllCommandBatchSize;
+	}
+
+	/**
+	 * 一括更新のコミット件数を取得します。
+	 * @return 一括更新のコミット件数
+	 */
+	public int getBulkUpdateAllCommandBatchSize() {
+		return bulkUpdateAllCommandBatchSize;
+	}
+
 }

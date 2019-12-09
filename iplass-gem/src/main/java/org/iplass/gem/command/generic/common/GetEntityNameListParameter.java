@@ -29,6 +29,16 @@ public class GetEntityNameListParameter implements GemWebApiParameter {
 	private String defName;
 
 	private String viewName;
+	
+	private String parentDefName;
+	
+	private String parentViewName;
+	
+	private String parentPropName;
+	
+	private String viewType;
+	
+	private Integer referenceSectionIndex;
 
 	private List<GetEntityNameListEntityParameter> list;
 
@@ -60,6 +70,38 @@ public class GetEntityNameListParameter implements GemWebApiParameter {
 		this.viewName = viewName;
 	}
 
+	public String getParentDefName() {
+		return parentDefName;
+	}
+
+	public void setParentDefName(String parentDefName) {
+		this.parentDefName = parentDefName;
+	}
+
+	public String getParentViewName() {
+		return parentViewName;
+	}
+
+	public void setParentViewName(String parentViewName) {
+		this.parentViewName = parentViewName;
+	}
+
+	public String getParentPropName() {
+		return parentPropName;
+	}
+
+	public void setParentPropName(String parentPropName) {
+		this.parentPropName = parentPropName;
+	}
+
+	public String getViewType() {
+		return viewType;
+	}
+
+	public void setViewType(String viewType) {
+		this.viewType = viewType;
+	}
+
 	/**
 	 * @return list
 	 */
@@ -73,4 +115,13 @@ public class GetEntityNameListParameter implements GemWebApiParameter {
 	public void setList(List<GetEntityNameListEntityParameter> list) {
 		this.list = list;
 	}
+
+	public Integer getReferenceSectionIndex() {
+		return referenceSectionIndex;
+	}
+
+	public void setReferenceSectionIndex(Integer referenceSectionIndex) {
+		this.referenceSectionIndex = referenceSectionIndex;
+	}
+
 }

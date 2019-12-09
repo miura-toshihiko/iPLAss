@@ -1,19 +1,19 @@
 /*
  * Copyright (C) 2011 INFORMATION SERVICES INTERNATIONAL - DENTSU, LTD. All Rights Reserved.
- * 
+ *
  * Unless you have purchased a commercial license,
  * the following license terms apply:
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
  * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
@@ -28,6 +28,7 @@ import java.lang.annotation.Target;
 
 /**
  * メタデータ編集用の画面で使用するフィールドの情報を定義するアノテーション
+ *
  * @author lis3wg
  */
 @Inherited
@@ -47,7 +48,12 @@ public @interface MetaFieldInfo {
 	/**
 	 * フィールドの値の入力方法
 	 */
-	InputType inputType() default InputType.TEXT ;
+	InputType inputType() default InputType.TEXT;
+
+	/**
+	 * フィールドの表示順
+	 */
+	int displayOrder() default -1;
 
 	/**
 	 * このフィールドが必須入力か
@@ -85,8 +91,7 @@ public @interface MetaFieldInfo {
 	Class<?> referenceClass() default Object.class;
 
 	/**
-	 * 参照型クラス(固定)
-	 * 特定のクラスのみ利用する場合に使用する。
+	 * 参照型クラス(固定) 特定のクラスのみ利用する場合に使用する。
 	 */
 	Class<?>[] fixedReferenceClass() default {};
 
@@ -111,17 +116,33 @@ public @interface MetaFieldInfo {
 	String mode() default "";
 
 	/**
-	 * 多言語設定を利用するか
+	 * 多言語プロパティ名
 	 */
-	boolean useMultiLang() default false;
+	String multiLangField() default "";
 
 	/**
-	 * inputTypeがPropertyの場合、そのプロパティの型を別の入力項目のProperty選択に利用するか
+	 * inputTypeがPropertyの場合、サブダイアログで選択するプロパティ設定でのEntity名として利用するか
+	 * サブダイアログでのPropertyはこのEntityが対象になる
 	 */
-	boolean useReferenceType() default false;
+	boolean childEntityName() default false;
 
 	/**
 	 * inputTypeがPropertyの場合、このプロパティの選択肢を取得するためのEntity定義名
+	 * Entityが固定されている場合に設定
 	 */
-	String entityDefinitionName() default "";
+	String fixedEntityName() default "";
+
+	/**
+	 * inputTypeがPropertyの場合、childEntityNameで指定されたEntity名を無視してルートのEntity名を利用するか
+	 * 指定された場合のみ、PropertyはルートのEntityが対象になる
+	 */
+	boolean useRootEntityName() default false;
+
+	/**
+	 * inputTypeがPropertyの場合、対象のEntity名を表すプロパティ名
+	 * 指定されたPropertyのProperty定義から対象のEntityを決定する。
+	 * 同じClass内で参照する場合に指定
+	 */
+	String sourceEntityNameField() default "";
+
 }

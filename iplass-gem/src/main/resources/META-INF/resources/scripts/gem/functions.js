@@ -34,6 +34,7 @@
  * modalWindow
  * subModalWindow
  * commaField
+ * togglableRadio
  * switchCondition
  * massReferenceTable
  * pager
@@ -42,6 +43,7 @@
  * refComboController
  * refLinkSelect
  * refLinkRadio
+ * refUnique
  * multiColumnTable
  * applyDatepicker
  * applyTimepicker
@@ -92,9 +94,9 @@ $(function(){
 		var $under = $("<div class='modal-inner sub-modal-inner' />").appendTo($dialog);
 		var $title = $("<h2 class='hgroup-01' />").appendTo($under);
 		$("<span />").attr({id: "modal-title-" + name}).appendTo($title);
-		$("<p class='modal-maximize sub-modal-maximize' />").text(scriptContext.locale.maximizeLink).appendTo($under);
-		$("<p class='modal-restore sub-modal-restore' />").text(scriptContext.locale.restoreLink).appendTo($under);
-		$("<p class='modal-close sub-modal-close' />").text(scriptContext.locale.closeLink).appendTo($under);
+		$("<p class='modal-maximize sub-modal-maximize' />").text(scriptContext.gem.locale.modal.maximizeLink).appendTo($under);
+		$("<p class='modal-restore sub-modal-restore' />").text(scriptContext.gem.locale.modal.restoreLink).appendTo($under);
+		$("<p class='modal-close sub-modal-close' />").text(scriptContext.gem.locale.modal.closeLink).appendTo($under);
 		var ifrm = "<iframe src=\"about:blank\" height=\"686\" width=\"100%\" frameborder=\"0\" name=\"" + name + "\"/>";
 		var $frame = $(ifrm).appendTo($under);
 
@@ -110,18 +112,20 @@ $(function(){
 				for (var i = 0; i < this.overlays.length; i++) {
 					$(this.overlays[i]).removeClass("modal-overlay");
 				}
-				$(overlay).css({zIndex:this.nextZindex()}).addClass("modal-overlay");
+				$(overlay).css({zIndex:this.nextZindex()}).addClass("modal-overlay").attr("overlay-id", this.zindex);
 				this.overlays.push(overlay);
 			},
 			removeOverlay:function($overlay){
-				for (var i = 0; i < this.overlays.length; i++) {
-					if (this.overlays[i] == $overlay) {
-						this.overlays.splice(i, 1);
+				for (var i = this.overlays.length - 1; i >= 0; i--) {
+					if (this.overlays[i] == $overlay
+							|| $(this.overlays[i]).attr("overlay-id") == $overlay.attr("overlay-id")) {
 						$overlay.css({zIndex:0}).removeClass("modal-overlay");
 						if (i > 0) {
 							$(this.overlays[i - 1]).addClass("modal-overlay");
 						}
+						this.overlays.splice(i, 1);
 						this.zindex -= 2;
+						return;
 					}
 				}
 			},
@@ -527,14 +531,15 @@ $.fn.allInputCheck = function(){
 			$this.on("mouseenter", function() {
 				$this.attr("title","");
 				var offset = $this.offset();
-				$toolwrap.show().css({
-					top : offset.top - 39,
-					left : offset.left - (options.offleft)
-				});
+				$toolwrap.show();
 				$toolicon.css({
 					left :  (options.range)
 				});
 				$tooltxt.append($title);
+				$toolwrap.css({
+					top : offset.top - $tooltxt.height() - 23,
+					left : offset.left - (options.offleft)
+				});
 			}).on("mouseleave", function() {
 				$toolwrap.hide();
 				$tooltxt.text('');	//title属性が表示するのを防ぐ
@@ -799,36 +804,38 @@ $.fn.allInputCheck = function(){
 			}
 		};
 
-		$under.on("click", ".modal-close.sub-modal-close", function(){
-			//GemConfigServiceで編集画面でキャンセル時に確認ダイアログを表示する設定になってる場合確認を行う
-			//⇒ダイアログ内画面のfunction「onDialogClose」で確認ダイアログをコントロール
-			//  アプリ側は確認が必要な画面に同名のfunctionを入れておけば、ここからその関数が呼び出される
-			if (typeof $frame.get(0).contentWindow.onDialogClose === "function" && !$frame.get(0).contentWindow.onDialogClose()) {
-				return;
-			}
-			fade.hide();
-			$frame.parents(".modal-dialog").trigger(new $.Event('closeModalDialog', {}));
-		});
-		$under.on("click", ".modal-maximize.sub-modal-maximize", function(){
-			var pw = $(rootWindow).width();
-			$under.addClass("fullWindow");
-			setModalWindowToCenter(pw);
-		});
-		$under.on("click", ".modal-restore.sub-modal-restore", function(){
-			$under.removeClass("fullWindow");
-			setModalWindowToCenter();
-		});
-		$overlay.on("click", function(){
-			//GemConfigServiceで編集画面でキャンセル時に確認ダイアログを表示する設定になってる場合確認を行う
-			//⇒ダイアログ内画面のfunction「onDialogClose」で確認ダイアログをコントロール
-			//  アプリ側は確認が必要な画面に同名のfunctionを入れておけば、ここからその関数が呼び出される
-			if (typeof $frame.get(0).contentWindow.onDialogClose === "function" && !$frame.get(0).contentWindow.onDialogClose()) {
-				return;
-			}
-			fade.hide();
-			$frame.parents(".modal-dialog").trigger(new $.Event('closeModalDialog', {}));
-		});
-		$under.attr("initialized", true);
+		if (!$under.attr("initialized")) {
+			$under.on("click", ".modal-close.sub-modal-close", function(){
+				//GemConfigServiceで編集画面でキャンセル時に確認ダイアログを表示する設定になってる場合確認を行う
+				//⇒ダイアログ内画面のfunction「onDialogClose」で確認ダイアログをコントロール
+				//  アプリ側は確認が必要な画面に同名のfunctionを入れておけば、ここからその関数が呼び出される
+				if (typeof $frame.get(0).contentWindow.onDialogClose === "function" && !$frame.get(0).contentWindow.onDialogClose()) {
+					return;
+				}
+				fade.hide();
+				$frame.parents(".modal-dialog").trigger(new $.Event('closeModalDialog', {}));
+			});
+			$under.on("click", ".modal-maximize.sub-modal-maximize", function(){
+				var pw = $(rootWindow).width();
+				$under.addClass("fullWindow");
+				setModalWindowToCenter(pw);
+			});
+			$under.on("click", ".modal-restore.sub-modal-restore", function(){
+				$under.removeClass("fullWindow");
+				setModalWindowToCenter();
+			});
+			$overlay.on("click", function(){
+				//GemConfigServiceで編集画面でキャンセル時に確認ダイアログを表示する設定になってる場合確認を行う
+				//⇒ダイアログ内画面のfunction「onDialogClose」で確認ダイアログをコントロール
+				//  アプリ側は確認が必要な画面に同名のfunctionを入れておけば、ここからその関数が呼び出される
+				if (typeof $frame.get(0).contentWindow.onDialogClose === "function" && !$frame.get(0).contentWindow.onDialogClose()) {
+					return;
+				}
+				fade.hide();
+				$frame.parents(".modal-dialog").trigger(new $.Event('closeModalDialog', {}));
+			});
+			$under.attr("initialized", true);
+		}
 
 		return this.each(function(){
 			var $this = $(this);
@@ -913,7 +920,7 @@ $.fn.allInputCheck = function(){
 				var tb = this;
 				var val = $(tb).val().trim();	//空白だけの場合にNaNになるので除去
 				if(isNaN(val)) {
-					alert(scriptContext.locale.numcheckMsg);
+					alert(scriptContext.gem.locale.common.numcheckMsg);
 					$(tb).val("");
 					return true;
 				}
@@ -1052,6 +1059,41 @@ $.fn.allInputCheck = function(){
 })(jQuery);
 
 /**
+ * 編集画面のラジオボタンの選択解除を可能にする。
+ */
+(function($) {
+	var _radioValues = [];
+	$.fn.togglableRadio = function(){
+		if (!this) return false;
+
+		this.each(function(){
+			var $this = $(this);
+
+			$this.on("click", function() {
+				var _this = $(this);
+				var _name = _this.attr('name');
+				var _val  = _this.val();
+				if (_radioValues[_name] === '' || _radioValues[_name] === null || _radioValues[_name] === undefined) {
+					_radioValues[_name] = _val;
+				} else {
+					if (_radioValues[_name] == _val) {
+						_this.prop('checked', false);
+						_radioValues[_name] = '';
+					} else {
+						_radioValues[_name] = _val;
+					}
+				}
+			});
+			//初期値を保持
+			if ($this.prop("checked")) {
+				var _name = $this.attr('name');
+				_radioValues[_name] = $this.val();
+			}
+		});
+	};
+})(jQuery);
+
+/**
  * 検索条件開閉
  */
 (function($){
@@ -1178,6 +1220,7 @@ $.fn.allInputCheck = function(){
 				showPageJump: $v.attr("data-showPageJump") == "true",
 				showPageLink: $v.attr("data-showPageLink") == "true",
 				showCount: $v.attr("data-showCount") == "true",
+				showSearchBtn: $v.attr("data-showSearchBtn") == "true",
 				condKey: $v.attr("data-condKey"),
 				tokenValue: $v.attr("data-tokenValue"),
 				purge: $v.attr("data-purge"),
@@ -1251,7 +1294,7 @@ $.fn.allInputCheck = function(){
 					if ($table.length > 0) {
 
 						//参照プロパティ取得
-						getMassReference($v.webapiName, $v.oid, $v.defName, $v.propName, $v.viewName, $v.offset, $v.sortKey, $v.sortType, $v.showCount, $v.condKey, $v.orgOutputType, function(dispInfo, count, list) {
+						getMassReferenceData($v.webapiName, $v.oid, $v.defName, $v.propName, $v.viewName, $v.offset, $v.sortKey, $v.sortType, $v.showCount, $v.condKey, $v.orgOutputType, function(dispInfo, count, list) {
 							//テーブル作成
 							if (!$v.grid) {
 								$v.grid = $table.build(dispInfo, count, list);
@@ -1261,9 +1304,9 @@ $.fn.allInputCheck = function(){
 							$(list).each(function(index) {
 								this["id"] = this.orgOid + "_" + this.orgVersion;
 								if ($v.editable && $v.updatable && !$v.changeEditLinkToViewLink) {
-									this["_mtpDetailLink"] = "<a href='javascript:void(0)' class='lnk-mr-01' data-oid='"+ this.orgOid + "' data-version='" + this.orgVersion + "'>" + scriptContext.locale.edit + "</a>";
+									this["_mtpDetailLink"] = "<a href='javascript:void(0)' class='lnk-mr-01' data-oid='"+ this.orgOid + "' data-version='" + this.orgVersion + "'>" + scriptContext.gem.locale.reference.edit + "</a>";
 								} else {
-									this["_mtpDetailLink"] = "<a href='javascript:void(0)' class='lnk-mr-02' data-oid='"+ this.orgOid + "' data-version='" + this.orgVersion + "'>" + scriptContext.locale.detail + "</a>";
+									this["_mtpDetailLink"] = "<a href='javascript:void(0)' class='lnk-mr-02' data-oid='"+ this.orgOid + "' data-version='" + this.orgVersion + "'>" + scriptContext.gem.locale.reference.detail + "</a>";
 								}
 								$v.grid.addRowData(index + 1, this);
 							});
@@ -1303,12 +1346,16 @@ $.fn.allInputCheck = function(){
 			});
 
 			//ページングリンクのイベント処理
-			if ($v.showPaging && $v.limit != null && $v.limit != "") {
+			//「ページングを非表示」「検索アイコンを常に表示」両方チェック⇒検索アイコンは表示
+			if (($v.showPaging || $v.showSearchBtn) && $v.limit != null && $v.limit != "") {
 				var $pager = $(options.pager, $v).pager({
 					limit: $v.limit,
-					showPageLink: $v.showCount ? $v.showPageLink : false,
-					showPageJump: $v.showCount ? $v.showPageJump : false,
-					showItemCount: $v.showCount,
+					showPageLink: $v.showPaging && $v.showCount ? $v.showPageLink : false,
+					showPageJump: $v.showPaging && $v.showCount ? $v.showPageJump : false,
+					showPrev: $v.showPaging,
+					showNext: $v.showPaging,
+					showSearchBtn: $v.showSearchBtn,
+					showItemCount: $v.showPaging && $v.showCount,
 					previewFunc: function(){
 						$v.offset -= $v.limit;
 						$v.getMassReference();
@@ -1336,8 +1383,8 @@ $.fn.allInputCheck = function(){
 						document.scriptContext["editReferenceCallback"] = function(entity) {
 							$v.getMassReference();
 
-							var $form = $("<form />").attr({method:"POST", action:$v.viewAction, target:target}).appendTo("body");
-							$("<input />").attr({type:"hidden", name:"defName", value:$v.targetDefName}).appendTo($form);
+							var viewAction = $v.viewAction + "/" + entity.oid;
+							var $form = $("<form />").attr({method:"POST", action:contextPath + "/" + viewAction, target:target}).appendTo("body");
 							$("<input />").attr({type:"hidden", name:"oid", value:entity.oid}).appendTo($form);
 							$("<input />").attr({type:"hidden", name:"version", value:entity.version}).appendTo($form);
 							$("<input />").attr({type:"hidden", name:"refEdit", value:$v.updatable}).appendTo($form);
@@ -1346,8 +1393,7 @@ $.fn.allInputCheck = function(){
 							$form.remove();
 						}
 
-						var $form = $("<form />").attr({method:"POST", action:$v.detailAction, target:target}).appendTo("body");
-						$("<input />").attr({type:"hidden", name:"defName", value:$v.targetDefName}).appendTo($form);
+						var $form = $("<form />").attr({method:"POST", action:contextPath + "/" + $v.detailAction, target:target}).appendTo("body");
 						$("<input />").attr({type:"hidden", name:"updateByParam", value:true}).appendTo($form);
 						$("<input />").attr({type:"hidden", name:$v.mappedBy, value:$v.oid}).appendTo($form);
 						if (isSubModal) $("<input />").attr({type:"hidden", name:"modalTarget", value:target}).appendTo($form);
@@ -1397,7 +1443,7 @@ $.fn.allInputCheck = function(){
 				document.scriptContext["editReferenceCallback"] = function(entity) {
 					$v.getMassReference();
 
-					var viewAction = $v.viewAction + "/" + entity.oid
+					var viewAction = $v.viewAction + "/" + entity.oid;
 					var $form = $("<form />").attr({method:"POST", action:contextPath + "/" + viewAction, target:target}).appendTo("body");
 //					$("<input />").attr({type:"hidden", name:"defName", value:$v.targetDefName}).appendTo($form);
 //					$("<input />").attr({type:"hidden", name:"oid", value:entity.oid}).appendTo($form);
@@ -1425,7 +1471,8 @@ $.fn.allInputCheck = function(){
 				document.scriptContext["editReferenceCallback"] = function(entity) {
 					$v.getMassReference();
 
-					var $form = $("<form />").attr({method:"POST", action:contextPath + "/" + $v.viewAction, target:target}).appendTo("body");
+					var viewAction = $v.viewAction + "/" + entity.oid;
+					var $form = $("<form />").attr({method:"POST", action:contextPath + "/" + viewAction, target:target}).appendTo("body");
 //					$("<input />").attr({type:"hidden", name:"defName", value:$v.targetDefName}).appendTo($form);
 					$("<input />").attr({type:"hidden", name:"oid", value:entity.oid}).appendTo($form);
 					$("<input />").attr({type:"hidden", name:"version", value:entity.version}).appendTo($form);
@@ -1462,11 +1509,14 @@ $.fn.allInputCheck = function(){
 				showItemCount: true,
 				showNoPage: true,
 				showCurrentPage: false,
+				showPrev: true,
+				showNext: true,
+				showSearchBtn: false,
 				previewFunc: null,
 				nextFunc: null,
 				searchFunc: null,
-				previousLabel: scriptContext.locale.previous,
-				nextLabel: scriptContext.locale.next
+				previousLabel: scriptContext.gem.locale.pager.previous,
+				nextLabel: scriptContext.gem.locale.pager.next
 		};
 		var options = $.extend(defaults, option);
 		if (!this) return false;
@@ -1503,12 +1553,16 @@ $.fn.allInputCheck = function(){
 			var $ul = $("<ul />").css("white-space", "nowrap").appendTo($v);
 
 			//前へ
-			var $preview = $("<li />").addClass("preview").appendTo($ul);
-			createLink($preview, options.previousLabel);
+			if (options.showPrev) {
+				var $preview = $("<li />").addClass("preview").appendTo($ul);
+				createLink($preview, options.previousLabel);
+			}
 
 			//次へ
-			var $next = $("<li />").addClass("next").appendTo($ul);
-			createLink($next, options.nextLabel);
+			if (options.showNext) {
+				var $next = $("<li />").addClass("next").appendTo($ul);
+				createLink($next, options.nextLabel);
+			}
 
 			//入力エリアと検索ボタン
 			if (options.showPageJump) {
@@ -1516,17 +1570,20 @@ $.fn.allInputCheck = function(){
 				var $current = $("<input />").attr({type:"text", maxlength:7, size:2}).appendTo($quickJump);
 				$("<span />").text(" / ").appendTo($quickJump);
 				var $max = $("<span />").addClass("last-page").appendTo($quickJump);
-				$("<span />").text(scriptContext.locale.page).appendTo($quickJump);
-
-				var $btns = $("<li />").appendTo($ul);
+				$("<span />").text(scriptContext.gem.locale.pager.page).appendTo($quickJump);
+			}
+ 
+			if (options.showSearchBtn || options.showPageJump) {
+				var $btns = $("<li />").addClass("search").appendTo($ul);
 				var $searchBtn = $("<span />").addClass("ui-icon ui-icon-search").appendTo($btns);
+				var $_current = $("<input type='hidden' />").appendTo($btns);
 			}
 
 			var $currentLabel = null;
 			if (options.showCurrentPage) {
 				var $currentPage = $("<li />").addClass("mr05").appendTo($ul);
 				$currentLabel = $("<span />").addClass("mr05").appendTo($currentPage);
-				$("<span />").text(scriptContext.locale.page).appendTo($currentPage);
+				$("<span />").text(scriptContext.gem.locale.pager.page).appendTo($currentPage);
 			}
 
 			//ページリンク
@@ -1607,7 +1664,7 @@ $.fn.allInputCheck = function(){
 				var $resultNum = $("<li />").addClass("result-num").appendTo($ul);
 				var $range = $("<span />").addClass("range").appendTo($resultNum);
 				var $count = $("<span />").addClass("count").text(0).appendTo($resultNum);
-				$("<span />").text(scriptContext.locale.item).appendTo($resultNum);
+				$("<span />").text(scriptContext.gem.locale.pager.count).appendTo($resultNum);
 			}
 
 			$.extend($v, {
@@ -1660,7 +1717,7 @@ $.fn.allInputCheck = function(){
 
 						if (count > 0) {
 							if (options.showItemCount) {
-								$range.css("display","").text((offset + 1) + " - " + tail + scriptContext.locale.item + " / ");
+								$range.css("display","").text((offset + 1) + " - " + tail + scriptContext.gem.locale.pager.count + " / ");
 							}
 							if (options.showPageJump) {
 								$quickJump.show();
@@ -1675,12 +1732,17 @@ $.fn.allInputCheck = function(){
 							}
 							if (options.showPageJump) {
 								$quickJump.hide();
+							}
+							if (options.showSearchBtn || options.showPageJump) {
 								$searchBtn.hide();
 							}
 						}
 						if (options.showItemCount) {
 							$count.text(count);
 						}
+					}
+					if (options.showSearchBtn || options.showPageJump) {
+						$_current.val(currentPage);
 					}
 					if (options.showCurrentPage) {
 						$currentLabel.text(currentPage);
@@ -1703,25 +1765,30 @@ $.fn.allInputCheck = function(){
 				$current.css("ime-mode", "disabled").on("change", function() {
 					var v = Number($(this).val());
 					if (isNaN(v)) {
-						alert(scriptContext.locale.numcheckMsg);
+						alert(scriptContext.gem.locale.common.numcheckMsg);
 						if ($(this).attr("beforeValue")) {
 							$(this).val($(this).attr("beforeValue"));
 						} else {
 							$(this).val("");
 						}
 					}
+					$_current.val(this.value);
 				}).on("keypress", function(event) {
 					if( event.which === 13 ){
 						$searchBtn.click();
 					}
 				});
+			}
+
+			if (options.showSearchBtn || options.showPageJump) {
 				$searchBtn.on("mouseenter", function() {
 					$(this).addClass("hover");
 				}).on("mouseleave", function() {
 					$(this).removeClass("hover");
-				}).on("click", function() {
-					var currentPage = $current.val();
-					if ($v.maxPage && currentPage > 0 && currentPage <= $v.maxPage) {
+				}).on("click", function() { 
+					var currentPage = $_current.val();
+					//notCount=trueかつshowSearchBtn=trueの場合、maxPageが設定されてません。
+					if (!$v.maxPage || $v.maxPage && currentPage > 0 && currentPage <= $v.maxPage) {
 						if ($v.searchFunc && $.isFunction($v.searchFunc)) {
 							$v.searchFunc.call(this, currentPage - 1);
 						}
@@ -1853,8 +1920,8 @@ $.fn.allInputCheck = function(){
 			setup($v);
 
 			var pleaseSelectLabel = "";
-			if (scriptContext.locale.showPulldownPleaseSelectLabel === true) {
-				pleaseSelectLabel = scriptContext.locale.pleaseSelect;
+			if (scriptContext.gem.showPulldownPleaseSelectLabel === true) {
+				pleaseSelectLabel = scriptContext.gem.locale.common.pleaseSelect;
 			}
 			$("<option />").attr({value:""}).text(pleaseSelectLabel).appendTo($v);
 
@@ -1885,7 +1952,7 @@ $.fn.allInputCheck = function(){
 				//common.js
 				addNormalValidator(function() {
 					if ($v.val() == "" && $v.siblings("select").children(":selected[value!='']").length > 0) {
-						alert(scriptContext.locale.specifyCondition);
+						alert(scriptContext.gem.locale.reference.specifyCondition);
 						$v.focus();
 						return false;
 					}
@@ -2037,8 +2104,8 @@ $.fn.allInputCheck = function(){
 			var $parent = null;
 			if (!reset) {
 				var pleaseSelectLabel = "";
-				if (scriptContext.locale.showPulldownPleaseSelectLabel === true) {
-					pleaseSelectLabel = scriptContext.locale.pleaseSelect;
+				if (scriptContext.gem.showPulldownPleaseSelectLabel === true) {
+					pleaseSelectLabel = scriptContext.gem.locale.common.pleaseSelect;
 				}
 				$parent = $("<select />").attr("name", name).attr("data-norewrite", true).addClass("form-size-02 inpbr");
 				if ($v.customStyle) {
@@ -2170,14 +2237,17 @@ $.fn.allInputCheck = function(){
 				refDefName     :$v.attr("data-refDefName"),//参照先の定義名
 				refEdit        :$v.attr("data-refEdit") == "true",//ダイアログの編集可否
 				updateRefAction:$v.attr("data-updateRefAction"),//表示画面での更新アクション
-				reloadUrl      :$v.attr("data-reloadUrl")//更新時のリロード用URL
+				reloadUrl      :$v.attr("data-reloadUrl"),//更新時のリロード用URL
+				selCallbackKey :$v.attr("data-selCallbackKey"),//選択コールバック
+				delCallbackKey :$v.attr("data-delCallbackKey"),//削除コールバック
+				refSectionIndex:$v.attr("data-refSectionIndex")//参照セクションインデックス
 			});
 
 			var $dialog = createDialog($v);
 			$v.on("click", function() {
 				if ($v.linkPropName && $v.linkPropName != "") {
 					if (!getLinkValue($v)) {
-						alert(messageFormat(scriptContext.locale.pleaseSelectAny, $v.linkPropName));
+						alert(messageFormat(scriptContext.gem.locale.reference.pleaseSelectAny, $v.linkPropName));
 						return;
 					}
 				}
@@ -2202,7 +2272,7 @@ $.fn.allInputCheck = function(){
 			var id = uniqueId();
 			var $div = $("<div />").addClass("recursiveTree").attr({id:"container_" + id, title:$v.title}).css("display", "none");
 			$v.after($div);
-			$("<span />").addClass("treeTitle").text(messageFormat(scriptContext.locale.pleaseSelectAny, $v.title)).appendTo($div);
+			$("<span />").addClass("treeTitle").text(messageFormat(scriptContext.gem.locale.reference.pleaseSelectAny, $v.title)).appendTo($div);
 			var $tree = $("<div />").addClass("treeContents").attr("id", "tree_" + id).appendTo($div);
 
 			var $dialog = $div.dialog({
@@ -2224,12 +2294,13 @@ $.fn.allInputCheck = function(){
 						var nodes = $tree.tree('getSelectedNodes');
 						for (var i = 0; i < nodes.length; i++) {
 							(function () {
-								var $li = $("<li />").addClass("list-add").appendTo($container);
+								var id = "li_" + $v.propName + i;
+								var $li = $("<li />").addClass("list-add").attr("id", id).appendTo($container);
 								var oid = nodes[i].oid;
 								var version = nodes[i].version;
 								var linkId = $v.prefix + $v.propName + "_" + oid;
-								var $link = $("<a href='javascript:void(0)' />").addClass("modal-lnk").attr({id:linkId, style:$v.customStyle}).text(nodes[i].name).on("click", function() {
-									showReference($v.viewAction, $v.refDefName, oid, version, linkId, $v.refEdit);
+								var $link = $("<a href='javascript:void(0)' />").addClass("modal-lnk").attr({"id":linkId, "data-linkId":linkId, "style":$v.customStyle}).text(nodes[i].name).on("click", function() {
+									showReference($v.viewAction, $v.refDefName, oid, version, linkId, $v.refEdit, null, $v.defName, $v.viewName, $v.propName, $v.viewType, $v.refSectionIndex);
 								}).appendTo($li);
 								if ($("body.modal-body").length != 0) {
 									$link.subModalWindow();
@@ -2237,10 +2308,23 @@ $.fn.allInputCheck = function(){
 									$link.modalWindow();
 								}
 								if ($v.deletable) {
-									$("<input type='button' />").addClass("gr-btn-02 del-btn").val(scriptContext.locale.deleteLabel).on("click", function() {$li.remove();}).appendTo($li);
+									var $delBtn = $("<input type='button' />").addClass("gr-btn-02 del-btn").val(scriptContext.gem.locale.reference.deleteLabel).on("click", function() {$li.remove();}).appendTo($li);
+									if ($v.delCallbackKey) {
+										var delCallback = scriptContext[$v.delCallbackKey];
+										if (delCallback && $.isFunction(delCallback)) {
+											$delBtn.on("click", function() { delCallback.call(this, $li.attr("id"));});
+										}
+									}
 								}
 
 								$("<input type='hidden' />").attr("name", $v.prefix + $v.propName).val(oid + "_" + version).appendTo($li);
+
+								if ($v.selCallbackKey) {
+									var selCallback = scriptContext[$v.selCallbackKey];
+									if (selCallback && $.isFunction(selCallback)) {
+										selCallback.call(this, $li.attr("id"));
+									}
+								}
 							})();
 						}
 
@@ -2255,7 +2339,7 @@ $.fn.allInputCheck = function(){
 						}
 					}
 				},{
-					text: scriptContext.locale.cancel,
+					text: scriptContext.gem.locale.common.cancel,
 					click: function() {
 						$(this).dialog("close");
 					}
@@ -2560,6 +2644,144 @@ $.fn.allInputCheck = function(){
 })(jQuery);
 
 /**
+ * 参照プロパティ(ユニークキー)
+ */
+(function($){
+	$.fn.refUnique = function(option) {
+		var defaults = {
+		};
+		var options = $.extend(defaults, option);
+		if (!this) return false;
+
+		return this.each(function(options) {
+			var $this = $(this);
+			init($this, options);
+		});
+
+		function init($v, options) {
+			var params = {
+				defName:					$v.attr("data-defName"),
+				viewType:					$v.attr("data-viewType"),
+				viewName:					$v.attr("data-viewName"),
+				propName:					$v.attr("data-propName"),
+				webapiName: 				$v.attr("data-webapiName"),
+				selectAction:				$v.attr("data-selectAction"),
+				viewAction:					$v.attr("data-viewAction"),
+				addAction:					$v.attr("data-addAction"),
+				urlParam:					$v.attr("data-urlParam"),
+				refDefName:					$v.attr("data-refDefName"),
+				refViewName:				$v.attr("data-refViewName"),
+				refEdit:					$v.attr("data-refEdit") == "true",
+				refSectionIndex:			$v.attr("data-refSectionIndex"),//参照セクションインデックス
+				specVersionKey:				$v.attr("data-specVersionKey"),
+				permitConditionSelectAll:	$v.attr("data-permitConditionSelectAll"),
+				multiplicity:				$v.attr("data-multiplicity"),
+				selUniqueRefCallback:		$v.attr("data-selUniqueRefCallback"),
+				insUniqueRefCallback:		$v.attr("data-insUniqueRefCallback")
+			};
+			$.extend($v, params);
+
+			var $txt = $("input[type='text'].inpbr", $v);
+			var $selBtn = $(":button.sel-btn", $v);
+			var $insBtn = $(":button.ins-btn", $v);
+			var $link = $("a.modal-lnk", $v);
+			var $hidden = $(":hidden[name='" + $v.propName + "']", $v);
+
+			if ($("body.modal-body").length != 0) {
+				$selBtn.subModalWindow();
+			} else {
+				$selBtn.modalWindow();
+			}
+
+			for (key in params) {
+				$selBtn.attr("data-" + key, params[key]);
+			}
+			$selBtn.on("click", function() {
+				//選択コールバック
+				var selRefCallback = scriptContext[$v.selUniqueRefCallback];
+				searchUniqueReference($v.attr("id"), $v.selectAction, $v.viewAction, $v.refDefName, $v.propName, $v.urlParam, $v.refEdit, selRefCallback, this, $v.refViewName, $v.permitConditionSelectAll, $v.defName, $v.viewName, $v.viewType, $v.refSectionIndex);
+			});
+
+			if ($("body.modal-body").length != 0) {
+				$insBtn.subModalWindow();
+			} else {
+				$insBtn.modalWindow();
+			}
+
+			for (key in params) {
+				$insBtn.attr("data-" + key, params[key]);
+			}
+			$insBtn.on("click", function() {
+				//新規コールバック
+				var insRefCallback = scriptContext[$v.insUniqueRefCallback];
+				insertUniqueReference($v.attr("id"), $v.addAction, $v.viewAction, $v.refDefName, $v.propName, $v.multiplicity, $v.urlParam, $v.defName, $v.viewName, $v.refEdit, insRefCallback, this, $v.viewType, $v.refSectionIndex);
+			});
+
+			$hidden.on("change", function() {
+				$link.show();
+			});
+
+			$txt.on("change", function() {
+				$link.attr({"id":"", "data-linkId":""}).text("").hide();
+				$hidden.val("");
+
+				//ユニークキーフィールドがクリアされた場合は、検索に行かずに、参照リンクの文字とoid、version情報をクリアする
+				if ($txt.val() == "") return;
+
+				var duplicate = false;
+				$v.parent("ul").find(".unique-key:not(:hidden)").children("input[type='text']").each(function() {
+					//重複チェック （自分を除く）
+					if ($(this).val() == $txt.val() && !$txt.is(this)) {
+						duplicate = true;
+						return;
+					}
+				});
+
+				if (duplicate) {
+					alert(scriptContext.gem.locale.reference.duplicateData);
+					return;
+				}
+
+				var _propName = $v.propName.replace(/^sc_/, "").replace(/\[\w+\]/g, "");
+				var uniqueValue = $txt.val().length == 0 ? null : $txt.val();
+				getUniqueItem($v.webapiName, $v.defName, $v.viewName, $v.viewType, _propName, uniqueValue, function(entity) {
+					var entityList = new Array();
+					if(entity && !$.isEmptyObject(entity)) {
+						var linkId = $v.propName + "_" + entity.oid;
+						var label = entity.name;
+						var key = entity.oid + "_" + entity.version;
+						var func = function() {
+							showReference($v.viewAction, $v.refDefName, entity.oid, entity.version, linkId, $v.refEdit, null, $v.defName, $v.viewName, $v.propName, $v.viewType, $v.refSectionIndex);
+						};
+
+						$link.attr({"id":linkId, "data-linkId":linkId}).text(label).show();
+						$link.removeAttr("onclick").off("click", func);
+						$link.on("click", func);
+						$hidden.val(key);
+
+						entityList.push(entity);
+
+						//選択コールバック
+						var selRefCallback = scriptContext[$v.selUniqueRefCallback];
+						if (selRefCallback && $.isFunction(selRefCallback)) {
+							if (typeof button === "undefined" || button == null) {
+								selRefCallback.call(this, entityList, null, $v.propName);
+							} else {
+								//引数で渡されたトリガーとなるボタンをthisとして渡す
+								selRefCallback.call(button, entityList, null, $v.propName);
+							}
+						}
+					} else {
+						alert(scriptContext.gem.locale.reference.noResult);
+					}
+				});
+
+			});
+		}
+	};
+})(jQuery);
+
+/**
  * テーブルカラム数変更
  */
 (function($){
@@ -2674,7 +2896,7 @@ function datepicker(selector) {
 		var defaults = {
 			dateFormat: dateUtil.getDatepickerDateFormat(),
 			inputDateFormat: dateUtil.getInputDateFormat(),
-			buttonText: scriptContext.locale.datepickerBtn,
+			buttonText: scriptContext.gem.locale.date.datepickerBtn,
 			buttonImage: null,
 			showErrorMessage: true,
 			validErrMsg: null,
@@ -2870,7 +3092,7 @@ function timepicker(selector) {
 			fixedMin: null,
 			fixedSec: null,
 			fixedMSec: "000",
-			buttonText: scriptContext.locale.timepickerBtn,
+			buttonText: scriptContext.gem.locale.date.timepickerBtn,
 			buttonImage: null,
 			showErrorMessage: true,
 			validErrMsg: null,
@@ -3052,7 +3274,7 @@ function datetimepicker(selector) {
 			fixedMin: null,
 			fixedSec: null,
 			fixedMSec: "000",	//現状未使用
-			buttonText: scriptContext.locale.datepickerBtn,
+			buttonText: scriptContext.gem.locale.date.datepickerBtn,
 			buttonImage: null,
 			showErrorMessage: true,
 			validErrMsg: null,
@@ -3380,7 +3602,7 @@ function datetimepicker(selector) {
 				colModels.push({name:"id", index:"id", hidden: true, key:true, label:"id", sortable:false });
 
 				//name
-				colModels.push({name:"name", index:"name", width: 260, label:"<p class='title'>" + scriptContext.locale.name + "</p>", sortable:false, formatter:function(cellValue, opt, rowObject) {
+				colModels.push({name:"name", index:"name", width: 260, label:"<p class='title'>" + scriptContext.gem.locale.common.name + "</p>", sortable:false, formatter:function(cellValue, opt, rowObject) {
 					var dispValue = $.jgrid.htmlEncode(cellValue);
 					if (rowObject.type == "E") {
 						var defName = rowObject.defName;

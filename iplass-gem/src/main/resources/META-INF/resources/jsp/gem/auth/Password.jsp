@@ -58,7 +58,9 @@
 	List<PropertyItem> getProperty(DetailFormView view) {
 		List<PropertyItem> propList = new ArrayList<PropertyItem>();
 		for (Section section : view.getSections()) {
-			if (section instanceof DefaultSection && section.isDispFlag() && ViewUtil.dispElement(Constants.EXEC_TYPE_UPDATE, section)) {
+			if (section instanceof DefaultSection
+					&& EntityViewUtil.isDisplayElement(User.DEFINITION_NAME, section.getElementRuntimeId(), OutputType.EDIT)
+					&& ViewUtil.dispElement(Constants.EXEC_TYPE_UPDATE, section)) {
 				propList.addAll(getProperty((DefaultSection) section));
 			}
 		}
@@ -70,7 +72,8 @@
 		for (Element elem : section.getElements()) {
 			if (elem instanceof PropertyItem) {
 				PropertyItem prop = (PropertyItem) elem;
-				if (prop.isDispFlag() && ViewUtil.dispElement(Constants.EXEC_TYPE_UPDATE, prop)) propList.add(prop);
+				if (EntityViewUtil.isDisplayElement(User.DEFINITION_NAME, prop.getElementRuntimeId(), OutputType.EDIT)
+						&& ViewUtil.dispElement(Constants.EXEC_TYPE_UPDATE, prop)) propList.add(prop);
 			} else if (elem instanceof DefaultSection) {
 				propList.addAll(getProperty((DefaultSection) elem));
 			}
@@ -201,6 +204,8 @@ if ("true".equals(request.getAttribute(Constants.UPDATE_USER_INFO))) {
 <tbody>
 <%
 			request.setAttribute(Constants.DEF_NAME, defName);
+			request.setAttribute(Constants.ROOT_DEF_NAME, defName); //NestTableの場合にDEF_NAMEが置き換わるので別名でRootのDefNameをセット
+			request.setAttribute(Constants.VIEW_NAME, setting.getViewName());
 			request.setAttribute(Constants.OUTPUT_TYPE, OutputType.EDIT);
 			request.setAttribute(Constants.ENTITY_DEFINITION, ed);
 			request.setAttribute(Constants.EXEC_TYPE, Constants.EXEC_TYPE_UPDATE);

@@ -1,19 +1,19 @@
 /*
  * Copyright (C) 2012 INFORMATION SERVICES INTERNATIONAL - DENTSU, LTD. All Rights Reserved.
- * 
+ *
  * Unless you have purchased a commercial license,
  * the following license terms apply:
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
  * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
@@ -30,6 +30,7 @@ import java.util.stream.Collectors;
 import org.iplass.gem.command.CommandUtil;
 import org.iplass.gem.command.Constants;
 import org.iplass.gem.command.GemResourceBundleUtil;
+import org.iplass.gem.command.ViewUtil;
 import org.iplass.mtp.ManagerLocator;
 import org.iplass.mtp.command.RequestContext;
 import org.iplass.mtp.entity.Entity;
@@ -55,8 +56,10 @@ import org.iplass.mtp.impl.util.ObjectUtil;
 import org.iplass.mtp.util.StringUtil;
 import org.iplass.mtp.utilityclass.definition.UtilityClassDefinitionManager;
 import org.iplass.mtp.view.generic.EntityView;
+import org.iplass.mtp.view.generic.EntityViewUtil;
 import org.iplass.mtp.view.generic.FormViewUtil;
 import org.iplass.mtp.view.generic.NullOrderType;
+import org.iplass.mtp.view.generic.OutputType;
 import org.iplass.mtp.view.generic.SearchFormView;
 import org.iplass.mtp.view.generic.SearchQueryContext;
 import org.iplass.mtp.view.generic.SearchQueryInterrupter;
@@ -64,6 +67,7 @@ import org.iplass.mtp.view.generic.SearchQueryInterrupter.SearchQueryType;
 import org.iplass.mtp.view.generic.editor.DateRangePropertyEditor;
 import org.iplass.mtp.view.generic.editor.JoinPropertyEditor;
 import org.iplass.mtp.view.generic.editor.NestProperty;
+import org.iplass.mtp.view.generic.editor.PropertyEditor;
 import org.iplass.mtp.view.generic.editor.ReferencePropertyEditor;
 import org.iplass.mtp.view.generic.editor.UserPropertyEditor;
 import org.iplass.mtp.view.generic.element.property.PropertyColumn;
@@ -138,16 +142,16 @@ public abstract class SearchContextBase implements SearchContext {
 
 		List<PropertyColumn> properties = getColumnProperties();
 		for (PropertyColumn p : properties) {
-			if (p.isDispFlag()) {
+			if (EntityViewUtil.isDisplayElement(getDefName(), p.getElementRuntimeId(), OutputType.SEARCHRESULT)) {
 				String propName = p.getPropertyName();
 				if (p.getEditor() instanceof ReferencePropertyEditor) {
 					List<NestProperty> nest = ((ReferencePropertyEditor)p.getEditor()).getNestProperties();
-					addSearchProperty(select, propName, nest.toArray(new NestProperty[nest.size()]));
+					addSearchProperty(select, propName, p.getEditor(), nest.toArray(new NestProperty[nest.size()]));
 				} else if (p.getEditor() instanceof JoinPropertyEditor) {
-					addSearchProperty(select, propName);
 					JoinPropertyEditor je = (JoinPropertyEditor) p.getEditor();
+					addSearchProperty(select, propName, je.getEditor());
 					for (NestProperty nest : je.getProperties()) {
-						addSearchProperty(select, nest.getPropertyName());
+						addSearchProperty(select, nest.getPropertyName(), nest.getEditor());
 					}
 				} else if (p.getEditor() instanceof DateRangePropertyEditor) {
 					addSearchProperty(select, propName);
@@ -497,7 +501,7 @@ public abstract class SearchContextBase implements SearchContext {
 	 */
 	protected Integer getSearchLimit() {
 		Integer limit = request.getParamAsInt(Constants.SEARCH_LIMIT);
-		if (limit == null) limit = getResultSection().getDispRowCount();
+		if (limit == null) limit = ViewUtil.getSearchLimit(getResultSection());
 		return limit;
 	}
 
@@ -520,6 +524,10 @@ public abstract class SearchContextBase implements SearchContext {
 	 * @param nest 参照先Entityのプロパティ
 	 */
 	protected void addSearchProperty(ArrayList<String> select, String propName, NestProperty... nest) {
+		addSearchProperty(select, propName, null, nest);
+	}
+
+	protected void addSearchProperty(ArrayList<String> select, String propName, PropertyEditor editor, NestProperty... nest) {
 		PropertyDefinition pd = getPropertyDefinition(propName);
 		if (pd instanceof ReferenceProperty) {
 			if (!select.contains(propName + "." + Entity.NAME)) {
@@ -530,6 +538,9 @@ public abstract class SearchContextBase implements SearchContext {
 			}
 			if (!select.contains(propName + "." + Entity.VERSION)) {
 				select.add(propName + "." + Entity.VERSION);
+			}
+			if (editor instanceof ReferencePropertyEditor) {
+				addDisplayLabelProperty(select, propName, (ReferencePropertyEditor) editor);
 			}
 			if (nest != null && nest.length > 0) {
 				EntityDefinition red = getReferenceEntityDefinition((ReferenceProperty) pd);
@@ -559,7 +570,15 @@ public abstract class SearchContextBase implements SearchContext {
 							ReferencePropertyEditor rpe = (ReferencePropertyEditor) np.getEditor();
 							if (!rpe.getNestProperties().isEmpty()) {
 								List<NestProperty> _nest = rpe.getNestProperties();
-								addSearchProperty(select, nestPropName, _nest.toArray(new NestProperty[_nest.size()]));
+								addSearchProperty(select, nestPropName, rpe, _nest.toArray(new NestProperty[_nest.size()]));
+							}
+							addDisplayLabelProperty(select, nestPropName, rpe);
+						} else if (np.getEditor() instanceof JoinPropertyEditor) {
+							JoinPropertyEditor jpe = (JoinPropertyEditor) np.getEditor();
+							addSearchProperty(select, nestPropName, jpe.getEditor());
+							if (!jpe.getProperties().isEmpty()) {
+								List<NestProperty> _nest = jpe.getProperties();
+								addSearchProperty(select, propName, editor, _nest.toArray(new NestProperty[_nest.size()]));
 							}
 						}
 					}
@@ -567,6 +586,17 @@ public abstract class SearchContextBase implements SearchContext {
 			}
 		} else {
 			if (!select.contains(propName)) select.add(propName);
+		}
+	}
+
+	protected void addDisplayLabelProperty(ArrayList<String> select, String propName, ReferencePropertyEditor rpe) {
+		if (rpe.getDisplayLabelItem() == null) return;
+
+		PropertyDefinition pd = getPropertyDefinition(propName);
+		if (pd instanceof ReferenceProperty) {
+			if (!select.contains(propName + "." + rpe.getDisplayLabelItem())) {
+				select.add(propName + "." + rpe.getDisplayLabelItem());
+			}
 		}
 	}
 
@@ -749,13 +779,7 @@ public abstract class SearchContextBase implements SearchContext {
 	}
 
 	protected SearchQueryInterrupter getDefaultSearchQueryInterrupter() {
-		return new SearchQueryInterrupter() {
-
-			@Override
-			public SearchQueryContext beforeSearch(RequestContext context, SearchFormView view, Query query) {
-				return new SearchQueryContext(query);
-			}
-		};
+		return new SearchQueryInterrupter() {};
 	}
 
 	private static String resourceString(String key, Object... arguments) {

@@ -36,6 +36,7 @@ import org.iplass.mtp.impl.script.template.GroovyTemplate;
 import org.iplass.mtp.impl.script.template.GroovyTemplateCompiler;
 import org.iplass.mtp.impl.util.ObjectUtil;
 import org.iplass.mtp.impl.view.generic.EntityViewHandler;
+import org.iplass.mtp.impl.view.generic.HasMetaNestProperty;
 import org.iplass.mtp.util.StringUtil;
 import org.iplass.mtp.view.generic.editor.NestProperty;
 import org.iplass.mtp.view.generic.editor.PropertyEditor;
@@ -50,7 +51,7 @@ import org.iplass.mtp.view.generic.editor.ReferencePropertyEditor.ReferenceDispl
  * 参照型プロパティエディタのメタデータ
  * @author lis3wg
  */
-public class MetaReferencePropertyEditor extends MetaPropertyEditor implements HasNestProperty {
+public class MetaReferencePropertyEditor extends MetaPropertyEditor implements HasMetaNestProperty {
 
 	/** シリアルバージョンUID */
 	private static final long serialVersionUID = 1640054951421530441L;
@@ -159,8 +160,16 @@ public class MetaReferencePropertyEditor extends MetaPropertyEditor implements H
 	/** ネストテーブルの表示順プロパティ */
 	private String tableOrderPropertyId;
 
+	/** 更新時に強制的に更新処理を行う */
+	private boolean forceUpadte;
+
 	/** 検索条件での全選択を許可 */
 	private boolean permitConditionSelectAll = true;
+	
+	private String displayLabelItem;
+
+	/** ユニークプロパティ */
+	private String uniqueItem;
 
 	/**
 	 * 表示タイプを取得します。
@@ -682,6 +691,22 @@ public class MetaReferencePropertyEditor extends MetaPropertyEditor implements H
 	}
 
 	/**
+	 * 更新時に強制的に更新処理を行うかを取得します。
+	 * @return forceUpdate 更新時に強制的に更新処理を行うか
+	 */
+	public boolean isForceUpadte() {
+		return forceUpadte;
+	}
+
+	/**
+	 * 更新時に強制的に更新処理を行うかを設定します。
+	 * @param forceUpadte 更新時に強制的に更新処理を行うか
+	 */
+	public void setForceUpadte(boolean forceUpadte) {
+		this.forceUpadte = forceUpadte;
+	}
+
+	/**
 	 * 検索条件での全選択を許可を取得します。
 	 * @return 検索条件での全選択を許可
 	 */
@@ -695,6 +720,30 @@ public class MetaReferencePropertyEditor extends MetaPropertyEditor implements H
 	 */
 	public void setPermitConditionSelectAll(boolean permitConditionSelectAll) {
 	    this.permitConditionSelectAll = permitConditionSelectAll;
+	}
+
+	public String getDisplayLabelItem() {
+		return displayLabelItem;
+	}
+
+	public void setDisplayLabelItem(String displayLabelItem) {
+		this.displayLabelItem = displayLabelItem;
+	}
+
+	/**
+	 * ユニークキープロパティを取得します。
+	 * @return ユニークキープロパティ
+	 */
+	public String getUniqueKeyItem() {
+		return uniqueItem;
+	}
+
+	/**
+	 * ユニークキープロパティを設定します。
+	 * @param uniqueKeyItem ユニークキープロパティ
+	 */
+	public void setUniqueKeyItem(String uniqueKeyItem) {
+		this.uniqueItem = uniqueKeyItem;
 	}
 
 	@Override
@@ -718,6 +767,14 @@ public class MetaReferencePropertyEditor extends MetaPropertyEditor implements H
 		objectId = refEntity.getMetaData().getId();
 		if (fromEntity != null) {
 			referenceFromObjectId = fromEntity.getMetaData().getId();
+		}
+		PropertyHandler displayLabelProperty = null;
+		if (rpe.getDisplayLabelItem() != null) {
+			displayLabelProperty = refEntity.getProperty(rpe.getDisplayLabelItem(), context);
+		}
+		PropertyHandler uniqueProperty = null;
+		if (rpe.getUniqueItem() != null) {
+			uniqueProperty = refEntity.getProperty(rpe.getUniqueItem(), context);
 		}
 		useSearchDialog = rpe.isUseSearchDialog();
 		singleSelect = rpe.isSingleSelect();
@@ -744,10 +801,13 @@ public class MetaReferencePropertyEditor extends MetaPropertyEditor implements H
 		showRefComboParent = rpe.isShowRefComboParent();
 		specificVersionPropertyName = rpe.getSpecificVersionPropertyName();
 		permitConditionSelectAll = rpe.isPermitConditionSelectAll();
+		displayLabelItem = displayLabelProperty != null ? displayLabelProperty.getId() : null;
+		uniqueItem = uniqueProperty != null ? uniqueProperty.getId() : null;
 		if (rpe.getTableOrderPropertyName() != null) {
 			PropertyHandler tableOrderProperty = refEntity.getProperty(rpe.getTableOrderPropertyName(), context);
 			tableOrderPropertyId = tableOrderProperty != null ? tableOrderProperty.getId() : null;
 		}
+		forceUpadte = rpe.isForceUpadte();
 		for (NestProperty np : rpe.getNestProperties()) {
 			MetaNestProperty mnp = new MetaNestProperty();
 			mnp.applyConfig(np, refEntity, fromEntity);
@@ -803,6 +863,14 @@ public class MetaReferencePropertyEditor extends MetaPropertyEditor implements H
 		if (fromEntity != null) {
 			editor.setReferenceFromObjectName(fromEntity.getMetaData().getName());
 		}
+		PropertyHandler displayLabelProperty = null;
+		if (displayLabelItem != null) {
+			displayLabelProperty = refEntity.getPropertyById(displayLabelItem, context);
+		}
+		PropertyHandler uniqueProperty = null;
+		if (uniqueItem != null) {
+			uniqueProperty = refEntity.getPropertyById(uniqueItem, context);
+		}
 		editor.setUseSearchDialog(useSearchDialog);
 		editor.setSingleSelect(singleSelect);
 		editor.setUseNestConditionWithProperty(useNestConditionWithProperty);
@@ -829,10 +897,13 @@ public class MetaReferencePropertyEditor extends MetaPropertyEditor implements H
 		editor.setShowRefComboParent(showRefComboParent);
 		editor.setSpecificVersionPropertyName(specificVersionPropertyName);
 		editor.setPermitConditionSelectAll(permitConditionSelectAll);
+		editor.setDisplayLabelItem(displayLabelProperty != null ? displayLabelProperty.getName() : null);
+		editor.setUniqueItem(uniqueProperty != null ? uniqueProperty.getName() : null);
 		if (tableOrderPropertyId != null) {
 			PropertyHandler tableOrderProperty = refEntity.getPropertyById(tableOrderPropertyId, context);
 			editor.setTableOrderPropertyName(tableOrderProperty != null ? tableOrderProperty.getName() : null);
 		}
+		editor.setForceUpadte(forceUpadte);
 		for (MetaNestProperty mnp : getNestProperties()) {
 			NestProperty np = mnp.currentConfig(refEntity, fromEntity);
 			if (np != null && np.getPropertyName() != null) editor.addNestProperty(np);

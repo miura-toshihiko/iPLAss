@@ -20,14 +20,16 @@
 
 package org.iplass.mtp.impl.auth.authenticate.token;
 
+import java.io.Serializable;
 import java.sql.Timestamp;
 
-public class AuthToken {
-	
+public class AuthToken implements Serializable {
+	private static final long serialVersionUID = -1344782486916344042L;
+
 	public static final String SEPARATOR = ".";
 	
 	private int tenantId;
-	private String uniqueKey;
+	private String ownerId;//e.g. userId
 	private String series;
 	private String token;
 	
@@ -35,21 +37,21 @@ public class AuthToken {
 	private Timestamp startDate;
 	
 	private String type;
-	private Object details;
+	private Serializable details;
 	
 	public AuthToken() {
 	}
 	
 	public AuthToken(String tokenEncoded) {
 		if (tokenEncoded != null) {
-			setTokenEncoded(tokenEncoded);
+			decodeToken(tokenEncoded);
 		}
 	}
 	
-	public AuthToken(int tenantId, String type, String uniqueKey, String series, String token, String policyName, Timestamp startDate, Object details) {
+	public AuthToken(int tenantId, String type, String ownerId, String series, String token, String policyName, Timestamp startDate, Serializable details) {
 		this.tenantId = tenantId;
 		this.type = type;
-		this.uniqueKey = uniqueKey;
+		this.ownerId = ownerId;
 		this.series = series;
 		this.token = token;
 		this.policyName = policyName;
@@ -57,11 +59,11 @@ public class AuthToken {
 		this.details = details;
 	}
 	
-	public String getTokenEncoded() {
+	public String encodeToken() {
 		return type + SEPARATOR + series + SEPARATOR + token;
 	}
 	
-	public void setTokenEncoded(String seriesToken) {
+	public void decodeToken(String seriesToken) {
 		int indexOf = seriesToken.indexOf(SEPARATOR);
 		if (indexOf < 0) {
 			return;
@@ -86,11 +88,11 @@ public class AuthToken {
 		this.type = type;
 	}
 
-	public Object getDetails() {
+	public Serializable getDetails() {
 		return details;
 	}
 
-	public void setDetails(Object details) {
+	public void setDetails(Serializable details) {
 		this.details = details;
 	}
 	public int getTenantId() {
@@ -99,11 +101,11 @@ public class AuthToken {
 	public void setTenantId(int tenantId) {
 		this.tenantId = tenantId;
 	}
-	public String getUniqueKey() {
-		return uniqueKey;
+	public String getOwnerId() {
+		return ownerId;
 	}
-	public void setUniqueKey(String uniqueKey) {
-		this.uniqueKey = uniqueKey;
+	public void setOwnerId(String ownerId) {
+		this.ownerId = ownerId;
 	}
 	public String getSeries() {
 		return series;

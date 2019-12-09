@@ -21,6 +21,7 @@
 package org.iplass.mtp.impl.view.generic.element;
 
 import javax.xml.bind.annotation.XmlSeeAlso;
+import javax.xml.bind.annotation.XmlTransient;
 
 import org.iplass.mtp.impl.metadata.MetaData;
 import org.iplass.mtp.impl.view.generic.EntityViewHandler;
@@ -70,10 +71,16 @@ public abstract class MetaElement implements MetaData {
 	}
 
 	/** 表示フラグ */
-	protected boolean dispFlag;
+	private boolean dispFlag;
+
+	/** 表示スクリプト  */
+	private String displayScript;
 
 	/** 編集時の表示タイプ */
-	protected EditDisplayType editDisplayType;
+	private EditDisplayType editDisplayType;
+
+	/** ElementのRuntimeId */
+	private String elementRuntimeId;
 
 	/**
 	 * 表示フラグを取得します。
@@ -92,11 +99,28 @@ public abstract class MetaElement implements MetaData {
 	}
 
 	/**
+	 * 表示スクリプトを取得します。
+	 *
+	 * @return 表示スクリプト
+	 */
+	public String getDisplayScript() {
+		return displayScript;
+	}
+
+	/**
+	 * 表示スクリプトを設定します。
+	 * @param displayScript 表示スクリプト
+	 */
+	public void setDisplayScript(String displayScript) {
+		this.displayScript = displayScript;
+	}
+
+	/**
 	 * 編集時の表示タイプを取得します。
 	 * @return 編集時の表示タイプ
 	 */
 	public EditDisplayType getEditDisplayType() {
-	    return editDisplayType;
+		return editDisplayType;
 	}
 
 	/**
@@ -104,41 +128,61 @@ public abstract class MetaElement implements MetaData {
 	 * @param editDisplayType 編集時の表示タイプ
 	 */
 	public void setEditDisplayType(EditDisplayType editDisplayType) {
-	    this.editDisplayType = editDisplayType;
+		this.editDisplayType = editDisplayType;
 	}
 
 	/**
-	 * 要素の内容を自身に適用。
-	 * @param element 要素
+	 * ElementのRuntimeIdを取得します。
+	 * @return ElementのRuntimeId
+	 */
+	@XmlTransient
+	public String getElementRuntimeId() {
+		return elementRuntimeId;
+	}
+
+	/**
+	 * ElementのRuntimeIdを設定します。
+	 * @param elementRuntimeId ElementのRuntimeId
+	 */
+	public void setElementRuntimeId(String elementRuntimeId) {
+		this.elementRuntimeId = elementRuntimeId;
+	}
+
+	/**
+	 * エレメントの設定をメタデータに反映します。
+	 * @param element エレメント定義
 	 * @param definitionId Entity定義のID
 	 */
 	public abstract void applyConfig(Element element, String definitionId);
 
 	/**
-	 * 自身の属性に要素の属性の値をセット
-	 * @param element 要素
+	 * エレメント共通の設定をメタデータに反映します。
+	 * @param element エレメント定義
 	 * @param definitionId Entity定義のID
 	 */
 	protected void fillFrom(Element element, String definitionId) {
 		this.dispFlag = element.isDispFlag();
+		this.displayScript = element.getDisplayScript();
 		this.editDisplayType = element.getEditDisplayType();
 	}
 
 	/**
-	 * 自身の内容を要素に適用。
+	 * メタデータからエレメントを生成します。
 	 * @param definitionId Entity定義のID
-	 * @return 要素
+	 * @return エレメント
 	 */
 	public abstract Element currentConfig(String definitionId);
 
 	/**
-	 * 要素の属性に自身の属性の値をセット
-	 * @param element 要素
+	 * メタデータ共通の設定をエレメントに反映します。
+	 * @param element エレメント定義
 	 * @param definitionId Entity定義のID
 	 */
 	protected void fillTo(Element element, String definitionId) {
-		element.setDispFlag(this.dispFlag);
-		element.setEditDisplayType(this.editDisplayType);
+		element.setDispFlag(dispFlag);
+		element.setDisplayScript(displayScript);
+		element.setEditDisplayType(editDisplayType);
+		element.setElementRuntimeId(elementRuntimeId);
 	}
 
 	/**
@@ -149,4 +193,5 @@ public abstract class MetaElement implements MetaData {
 	public ElementHandler createRuntime(EntityViewHandler entityView) {
 		return new ElementHandler(this, entityView);
 	}
+
 }

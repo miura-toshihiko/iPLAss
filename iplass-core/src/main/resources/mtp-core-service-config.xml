@@ -20,6 +20,7 @@
 		<property name="org.iplass.mtp.prefs.PreferenceManager" value="org.iplass.mtp.impl.prefs.PreferenceManagerImpl" />
 		<property name="org.iplass.mtp.pushnotification.PushNotificationManager" value="org.iplass.mtp.impl.pushnotification.PushNotificationManagerImpl" />
 		<property name="org.iplass.mtp.pushnotification.template.definition.PushNotificationTemplateDefinitionManager" value="org.iplass.mtp.impl.pushnotification.template.PushNotificationTemplateDefinitionManagerImpl" />
+		<property name="org.iplass.mtp.runtime.Environment" value="org.iplass.mtp.impl.runtime.EnvironmentImpl" />
 		<property name="org.iplass.mtp.sms.SmsMailManager" value="org.iplass.mtp.impl.sms.SmsMailManagerImpl" />
 		<property name="org.iplass.mtp.sms.template.definition.SmsMailTemplateDefinitionManager" value="org.iplass.mtp.impl.sms.template.SmsMailTemplateDefinitionManagerImpl" />
 		<property name="org.iplass.mtp.tenant.TenantManager" value="org.iplass.mtp.impl.tenant.TenantManagerImpl" />
@@ -144,14 +145,26 @@
 		<interface>org.iplass.mtp.impl.auth.authenticate.token.AuthTokenService</interface>
 		<property name="storeMap">
 			<property name="default" class="org.iplass.mtp.impl.auth.authenticate.token.RdbAuthTokenStore" />
+			<property name="cachableRdb" class="org.iplass.mtp.impl.auth.authenticate.token.CachableAuthTokenStore">
+				<property name="authTokenStore" class="org.iplass.mtp.impl.auth.authenticate.token.RdbAuthTokenStore" />
+			</property>
+			<property name="cacheOnly" class="org.iplass.mtp.impl.auth.authenticate.token.CacheOnlyAuthTokenStore" />
 		</property>
 		<property name="handler" class="org.iplass.mtp.impl.auth.authenticate.rememberme.RememberMeTokenHandler">
 			<property name="type" value="REMME" />
 			<property name="store" value="default" />
+			<property name="hashSettings">
+				<property name="version" value="1" />
+				<property name="hashAlgorithm" value="SHA-256" />
+			</property>
 		</property>
 		<property name="handler" class="org.iplass.mtp.impl.auth.authenticate.simpletoken.SimpleAuthTokenHandler">
 			<property name="type" value="SAT" />
 			<property name="store" value="default" />
+			<property name="hashSettings">
+				<property name="version" value="1" />
+				<property name="hashAlgorithm" value="SHA-256" />
+			</property>
 		</property>
 	</service>
 
@@ -216,15 +229,10 @@
 		 -->
 		<property name="mail.host" value="XXXXXXXX"/>
 
-		<!-- デフォルトCharset -->
-		<property name="mail.charset" value="ISO-2022-JP"/>
-
-		<!--
-			Content-Transfer-Encoding
-			これは、一部のケータイメールが quoted-printable を処理できないことへの対策となります。
-			元情報 http://www.igapyon.jp/igapyon/diary/2007/ig070904.html
-		 -->
-		<property name="mail.encoding" value="7bit"/>
+		<!-- Charset -->
+		<property name="mail.charset" value="utf-8"/>
+		<!-- Content-Transfer-Encoding -->
+		<property name="mail.encoding" value="base64"/>
 
 		<!-- ■ for develop only (additional="true) ■ -->
 		<!-- 送信メールをデバッグ出力する場合、以下を有効にしてください。 -->
@@ -250,7 +258,7 @@
 		<property name="authorizationKey" value="[your Firebase authorizationKey]" />
 		<property name="dryRun" value="false" />
 		<property name="enableRetry" value="true" />
-		<property name="exponentialBackoff" class="org.iplass.mtp.impl.pushnotification.fcm.ExponentialBackoff">
+		<property name="exponentialBackoff" class="org.iplass.mtp.impl.http.ExponentialBackoff">
 			<property name="retryIntervalMillis" value="500" />
 			<property name="randomizationFactor" value="0.5" />
 			<property name="multiplier" value="1.5" />
@@ -276,6 +284,7 @@
 		<property name="tenantResource" value="org.iplass.mtp.impl.auth.authorize.builtin.TenantAuthorizeContext" />
 		<property name="tenantResource" value="org.iplass.mtp.impl.entity.cache.QueryCacheTenantResource" />
 		<property name="tenantResource" value="org.iplass.mtp.impl.validation.bean.BeanValidationResource" />
+		<property name="tenantResource" value="org.iplass.mtp.impl.logging.LoggingContext" />
 
 		<property name="defaultTenantName" value="iPLAss" />
 		<property name="defaultPasswordPatternErrorMessage" value="パスワードは6文字以上の英数字で入力してください。" />
@@ -289,6 +298,11 @@
 		<property name ="localTenantIds" value="148" />
 		<property name ="localTenantIds" value="149" />
 		 -->
+	</service>
+
+	<service>
+		<interface>org.iplass.mtp.impl.logging.LoggingService</interface>
+		<class>org.iplass.mtp.impl.logging.logback.LogbackLoggingService</class>
 	</service>
 
 	<!-- Entity関連 -->
@@ -435,6 +449,22 @@
 			ver1.5.2でサイズ管理制御のためにlob_storeテーブルのレイアウトを変更。
 			既存システムでlob_storeテーブルが変更できない場合は、falseを指定することで回避可能。 -->
 		<property name="manageLobSizeOnRdb" value="false" />
+
+		<!-- テンポラリデータの保存日数。クリーナによりここで指定された日数よりも前のデータが削除されます。 -->
+		<!--
+		<property name="temporaryKeepDay" value="1" />
+		-->
+
+		<!-- 無効(非参照)データの保存日数。クリーナによりここで指定された日数よりも前のデータが削除されます。 -->
+		<!--
+		<property name="invalidKeepDay" value="0" />
+		-->
+
+		<!-- クリーナのコミット件数。 -->
+		<!--
+		<property name="cleanCommitLimit" value="100" />
+		-->
+
 	</service>
 	<service name="OidCounter">
 		<interface>org.iplass.mtp.impl.counter.CounterService</interface>
@@ -503,6 +533,7 @@
 	<service>
 		<interface>org.iplass.mtp.impl.cluster.ClusterService</interface>
 		<depend>AsyncTaskServiceForHttpMessageChannel</depend>
+		<!-- for use Simple HTTP messaging -->
 		<property name="messageChannel" class="org.iplass.mtp.impl.cluster.channel.http.HttpMessageChannel">
 			<!--
 			<property name="serverUrl" value="http://localhost:18080/mtp/cmcs" />
@@ -516,8 +547,16 @@
 			<property name="poolingTimeToLive" value="[set poolingTimeToLive if needed]" />
 			<property name="proxyHost" value="proxy.xxx.xxx" />
 			<property name="proxyPort" value="8080" />
-			 -->
+			-->
 		</property>
+		
+		<!-- for use JGroups -->
+		<!--
+		<property name="messageChannel" class="org.iplass.mtp.impl.cluster.channel.jgroups.JGroupsMessageChannel">
+			<property name="configFilePath" value="/jgroups-config-udp.xml" />
+			<property name="clusterName" value="iPLAssCluster" />
+		</property>
+		-->
 	</service>
 	<service name="AsyncTaskServiceForHttpMessageChannel">
 		<interface>org.iplass.mtp.impl.async.AsyncTaskService</interface>
@@ -668,6 +707,7 @@
 		<!-- CounterServiceのカウンタキャッシュ -->
 		<property name="rdbTableCounter" class="org.iplass.mtp.impl.cache.store.builtin.SyncServerCacheStoreFactory">
 			<property name="namespace" value="mtp.counter.rdbTableCounter" />
+			<property name="noClusterEventOnPut" value="true" />
 			<property name="cacheKeyResolver" class="org.iplass.mtp.impl.counter.CachableRdbTableCounterService$CounterCacheKeyResolver" />
 			<property name="store" class="org.iplass.mtp.impl.cache.store.builtin.SimpleCacheStoreFactory">
 				<property name="timeToLive" value="-1" />
@@ -734,6 +774,27 @@
 					<property name="size" value="128" />
 				</property>
 			</property>
+		</property>
+
+		<!-- CachableAuthTokenStore キャッシュ -->
+		<property name="cachableAuthTokenStore" class="org.iplass.mtp.impl.cache.store.builtin.SyncServerCacheStoreFactory">
+			<property name="namespacePattern" value="mtp[.]auth[.]cachableAuthTokenStore/.*" />
+			<property name="cacheKeyResolver" class="org.iplass.mtp.impl.auth.authenticate.token.AuthTokenKeyResolver" />
+			<property name="store" class="org.iplass.mtp.impl.cache.store.builtin.SimpleCacheStoreFactory">
+				<!-- 30分間有効 -->
+				<property name="timeToLive" value="1800000" />
+				<!-- 最大キャッシュ数1万 -->
+				<property name="size" value="10000" />
+			</property>
+		</property>
+		
+		<!-- CacheOnlyAuthTokenStore キャッシュ -->
+		<!-- TODO 本番利用時はRedisCacheStoreFactoryなど利用するように設定変更が必要 -->
+		<property name="cacheOnlyAuthTokenStore" class="org.iplass.mtp.impl.cache.store.builtin.SimpleCacheStoreFactory">
+			<property name="namespacePattern" value="mtp[.]auth[.]cacheOnlyAuthTokenStore/.*" />
+			<property name="indexCount" value="2" />
+			<!-- 1時間有効 -->
+			<property name="timeToLive" value="3600000" />
 		</property>
 
 		<!-- 上記namespace以外の場合のデフォルトキャッシュ -->

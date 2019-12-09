@@ -245,12 +245,12 @@ public class FulltextSearchLuceneService extends AbstractFulltextSeachService {
 		try {
 			String className = config.getValue("analyzer");
 			if (StringUtil.isNotEmpty(className)) {
-				analyzer = (Analyzer) Class.forName(config.getValue("analyzer")).getConstructor().newInstance();
+				analyzer = AnalyzerFactory.createAnalyzer(className, config.getValue("analyzerSetting", AnalyzerSetting.class));
 			} else {
 				analyzer = (Analyzer) config.getBean("analyzer");
 			}
 		} catch (Exception e) {
-			logger.warn("Analyzer not found. use JapaneseAnalyzer(mode:search). : " + config.getValue("analyzer"));
+			logger.warn("Analyzer not found. use JapaneseAnalyzer(mode:search). : " + config.getValue("analyzer"), e);
 			analyzer = new JapaneseAnalyzer();
 		}
 		defaultOperator = Operator.valueOf(config.getValue("defaultOperator"));
@@ -309,13 +309,6 @@ public class FulltextSearchLuceneService extends AbstractFulltextSeachService {
 		EntityManager em = ManagerLocator.getInstance().getManager(EntityManager.class);
 		logger.debug("### EQL : " + query.toString() + "###");
 
-		final SimpleDateFormat dateFormat = DateUtil.getSimpleDateFormat(getLocaleFormat().getOutputDateFormat(), false);
-		dateFormat.setLenient(false);
-		final SimpleDateFormat dateTimeFormat = DateUtil.getSimpleDateFormat(getLocaleFormat().getOutputDatetimeSecFormat(), true);
-		dateTimeFormat.setLenient(false);
-		final SimpleDateFormat timeFormat = DateUtil.getSimpleDateFormat(getLocaleFormat().getOutputTimeSecFormat(), false);
-		timeFormat.setLenient(false);
-
 		final boolean[] isIndexed = new boolean[]{false};
 
 		em.searchEntity(query, entity -> {
@@ -346,21 +339,16 @@ public class FulltextSearchLuceneService extends AbstractFulltextSeachService {
 					Object val = entity.getValue(propName);
 					if (val != null) {
 						String fieldName = e.getValue();
-						String strVal;
-						if (val instanceof Timestamp) {
-							strVal = dateTimeFormat.format((Timestamp) val);
-						} else if (val instanceof Date) {
-							strVal = dateFormat.format((Date) val);
-						} else if (val instanceof Time) {
-							strVal = timeFormat.format((Time) val);
-						} else if (val instanceof BigDecimal) {
-							strVal = ((BigDecimal) val).toPlainString();
-						} else if (val instanceof BinaryReference) {
-							strVal = parseBinaryReference((BinaryReference) val, em);
+						if (val.getClass().isArray()) {
+							Object[] valArray = (Object[]) val;
+							for (int i = 0; i < valArray.length; i++) {
+								String strVal = convertValue(valArray[i]);
+								doc.add(new TextField(fieldName, strVal, Field.Store.NO));
+							}
 						} else {
-							strVal = val.toString();
+							String strVal = convertValue(val);
+							doc.add(new TextField(fieldName, strVal, Field.Store.NO));
 						}
-						doc.add(new TextField(fieldName, strVal, Field.Store.NO));
 					}
 				}
 
@@ -376,7 +364,31 @@ public class FulltextSearchLuceneService extends AbstractFulltextSeachService {
 		return isIndexed[0];
 	}
 
-	private String parseBinaryReference(BinaryReference br, EntityManager em) throws IOException {
+	private String convertValue(Object val) throws IOException {
+		String strVal = null;
+		if (val instanceof Timestamp) {
+			final SimpleDateFormat dateTimeFormat = DateUtil.getSimpleDateFormat(getLocaleFormat().getOutputDatetimeSecFormat(), true);
+			dateTimeFormat.setLenient(false);
+			strVal = dateTimeFormat.format((Timestamp) val);
+		} else if (val instanceof Date) {
+			final SimpleDateFormat dateFormat = DateUtil.getSimpleDateFormat(getLocaleFormat().getOutputDateFormat(), false);
+			dateFormat.setLenient(false);
+			strVal = dateFormat.format((Date) val);
+		} else if (val instanceof Time) {
+			final SimpleDateFormat timeFormat = DateUtil.getSimpleDateFormat(getLocaleFormat().getOutputTimeSecFormat(), false);
+			timeFormat.setLenient(false);
+			strVal = timeFormat.format((Time) val);
+		} else if (val instanceof BigDecimal) {
+			strVal = ((BigDecimal) val).toPlainString();
+		} else if (val instanceof BinaryReference) {
+			strVal = parseBinaryReference((BinaryReference) val);
+		} else {
+			strVal = val.toString();
+		}
+		return strVal;
+	}
+
+	private String parseBinaryReference(BinaryReference br) throws IOException {
 
 		//順番にサポートしているかをチェック
 		for (int i = 0; i < binaryParsers.size(); i++) {
@@ -558,6 +570,10 @@ public class FulltextSearchLuceneService extends AbstractFulltextSeachService {
 	@SuppressWarnings("unchecked")
 	@Override
 	public <T extends Entity> SearchResult<T> fulltextSearchEntity(Map<String, List<String>> entityProperties, String fulltext) {
+		if (searcherManager == null) {
+			return new SearchResult<T>(-1, null);
+		}
+
 		MultiFieldQueryParser qp = new MultiFieldQueryParser(searchFields, analyzer);
 		qp.setDefaultOperator(defaultOperator);
 
@@ -582,7 +598,9 @@ public class FulltextSearchLuceneService extends AbstractFulltextSeachService {
 			}
 			luceneQuery = setEntityDefCondition(luceneQuery, defNameList.toArray(new String[defNameList.size()]));
 
-			logger.debug("lucene query : " + luceneQuery.toString());
+			if (logger.isDebugEnabled()) {
+				logger.debug("lucene query : " + luceneQuery.build().toString());
+			}
 
 			TopDocs docs = searcher.search(luceneQuery.build(), getMaxRows(), getDefaultSort(), true, false);
 			ScoreDoc[] hits = docs.scoreDocs;
@@ -703,16 +721,13 @@ public class FulltextSearchLuceneService extends AbstractFulltextSeachService {
 
 	@Override
 	public List<String> fulltextSearchOidList(String searchDefName, String fulltext) {
-
-		MultiFieldQueryParser qp = new MultiFieldQueryParser(searchFields, analyzer);
-		qp.setDefaultOperator(defaultOperator);
-
 		List<String> oidList = new ArrayList<String>();
-
-		if (StringUtil.isEmpty(searchDefName) || StringUtil.isEmpty(fulltext)) {
+		if (StringUtil.isEmpty(searchDefName) || StringUtil.isEmpty(fulltext) || searcherManager == null) {
 			return oidList;
 		}
 
+		MultiFieldQueryParser qp = new MultiFieldQueryParser(searchFields, analyzer);
+		qp.setDefaultOperator(defaultOperator);
 		IndexSearcher searcher = null;
 		try {
 
@@ -731,7 +746,9 @@ public class FulltextSearchLuceneService extends AbstractFulltextSeachService {
 			luceneQuery = setTenantCondition(qp, luceneQuery);
 			luceneQuery = setEntityDefCondition(luceneQuery, searchDefName);
 
-			logger.debug("lucene query : " + luceneQuery.toString());
+			if (logger.isDebugEnabled()) {
+				logger.debug("lucene query : " + luceneQuery.build().toString());
+			}
 
 			TopDocs docs = searcher.search(luceneQuery.build(), allIndexCount);
 			ScoreDoc[] hits = docs.scoreDocs;
@@ -767,6 +784,9 @@ public class FulltextSearchLuceneService extends AbstractFulltextSeachService {
 
 	@Override
 	public List<FulltextSearchResult> execFulltextSearch(String searchDefName, String keywords) {
+		if (searcherManager == null) {
+			return new ArrayList<FulltextSearchResult>();
+		}
 
 		MultiFieldQueryParser qp = new MultiFieldQueryParser(searchFields, analyzer);
 		qp.setDefaultOperator(defaultOperator);
@@ -784,7 +804,9 @@ public class FulltextSearchLuceneService extends AbstractFulltextSeachService {
 			luceneQuery = setTenantCondition(qp, luceneQuery);
 			luceneQuery = setEntityDefCondition(luceneQuery, searchDefName);
 
-			logger.debug("lucene query : " + luceneQuery.toString());
+			if (logger.isDebugEnabled()) {
+				logger.debug("lucene query : " + luceneQuery.build().toString());
+			}
 
 			TopDocs docs = searcher.search(luceneQuery.build(), getMaxRows(), getDefaultSort());
 			ScoreDoc[] hits = docs.scoreDocs;

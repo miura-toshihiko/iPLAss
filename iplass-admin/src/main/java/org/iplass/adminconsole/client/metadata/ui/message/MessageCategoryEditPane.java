@@ -24,10 +24,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 import org.iplass.adminconsole.client.base.event.DataChangedEvent;
 import org.iplass.adminconsole.client.base.event.DataChangedHandler;
@@ -111,7 +111,7 @@ public class MessageCategoryEditPane extends MetaDataMainEditPane {
 	/** ヘッダ部分 */
 	private MetaCommonHeaderPane headerPane;
 	/** 共通属性部分 */
-	private MetaCommonAttributeSection commonSection;
+	private MetaCommonAttributeSection<MessageCategory> commonSection;
 
 	/** 個別属性部分 */
 	private MessageItemEditPane messageItemPane;
@@ -170,7 +170,7 @@ public class MessageCategoryEditPane extends MetaDataMainEditPane {
 		headerPane.addMember(importCSV);
 
 		//共通属性
-		commonSection = new MetaCommonAttributeSection(targetNode, MessageCategory.class);
+		commonSection = new MetaCommonAttributeSection<>(targetNode, MessageCategory.class);
 
 		//個別属性
 		messageItemPane = new MessageItemEditPane();
@@ -225,12 +225,7 @@ public class MessageCategoryEditPane extends MetaDataMainEditPane {
 		this.curVersion = entry.getDefinitionInfo().getVersion();
 		this.curDefinitionId = entry.getDefinitionInfo().getObjDefId();
 
-		//共通属性
-		commonSection.setName(curDefinition.getName());
-		commonSection.setDisplayName(curDefinition.getDisplayName());
-		commonSection.setDescription(curDefinition.getDescription());
-
-		//MessageItem
+		commonSection.setDefinition(curDefinition);
 		messageItemPane.setMessageItems(curDefinition.getMessageItems());
 	}
 
@@ -250,10 +245,7 @@ public class MessageCategoryEditPane extends MetaDataMainEditPane {
 			@Override
 			public void execute(Boolean value) {
 				if (value) {
-					curDefinition.setName(commonSection.getName());
-					curDefinition.setDisplayName(commonSection.getDisplayName());
-					curDefinition.setDescription(commonSection.getDescription());
-
+					commonSection.getEditDefinition(curDefinition);
 					curDefinition.setMessageItems(messageItemPane.getEditMessageItems());
 
 					updateDefinition(curDefinition, true);
@@ -780,7 +772,8 @@ public class MessageCategoryEditPane extends MetaDataMainEditPane {
 				return null;
 			}
 
-			Map<String, MessageItem> items = new LinkedHashMap<>();
+			//IDでソートするためTreeMapに格納
+			Map<String, MessageItem> items = new TreeMap<>();
 			for (MessageItemListGridRecord itemRecord : allRecords) {
 
 				String status = itemRecord.getStatus();

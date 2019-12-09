@@ -1,19 +1,19 @@
 /*
  * Copyright (C) 2011 INFORMATION SERVICES INTERNATIONAL - DENTSU, LTD. All Rights Reserved.
- * 
+ *
  * Unless you have purchased a commercial license,
  * the following license terms apply:
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
  * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
@@ -49,9 +49,10 @@ import org.iplass.mtp.impl.rdb.adapter.RdbAdapter;
 
 public class LobDao {
 	private static final String COUNTER_SERVICE_INC_KEY = "lobid";
-	
+
 	private RdbAdapter rdb;
 	private CounterService counterService;
+	private boolean manageLobSizeOnRdb;
 
 	private BlobInsertSql blobInsertSql;
 	private BlobSearchSql searchSql;
@@ -68,9 +69,10 @@ public class LobDao {
 	public LobDao() {
 	}
 
-	public void init(RdbAdapter rdb, CounterService counterService) {
+	public void init(RdbAdapter rdb, CounterService counterService, boolean manageLobSizeOnRdb) {
 		this.rdb = rdb;
 		this.counterService = counterService;
+		this.manageLobSizeOnRdb = manageLobSizeOnRdb;
 		blobInsertSql = rdb.getUpdateSqlCreator(BlobInsertSql.class);
 		searchSql = rdb.getQuerySqlCreator(BlobSearchSql.class);
 		deleteSql = rdb.getUpdateSqlCreator(BlobDeleteSql.class);
@@ -117,7 +119,7 @@ public class LobDao {
 		} else {
 			status = Lob.STATE_VALID;
 		}
-		Lob bin = new Lob(tenantId, lobId, name, type, defId, propId, oid, version, sessionId, status, lobDataId, lobStore, this);
+		Lob bin = new Lob(tenantId, lobId, name, type, defId, propId, oid, version, sessionId, status, lobDataId, lobStore, this, manageLobSizeOnRdb);
 		return bin;
 	}
 
@@ -143,7 +145,7 @@ public class LobDao {
 				ResultSet rs = getStatement().executeQuery(searchSql.toSql(rdb, tenantId, lobId, sessionId,defId, propId, oid, version, withLock));
 				Lob bin = null;
 				if (rs.next()) {
-					bin = searchSql.toBinaryData(rs, lobStore, LobDao.this);
+					bin = searchSql.toBinaryData(rs, lobStore, LobDao.this, manageLobSizeOnRdb);
 				}
 				rs.close();
 				return bin;
@@ -163,7 +165,7 @@ public class LobDao {
 				ArrayList<Lob> res = new ArrayList<Lob>();
 
 				while (rs.next()) {
-					Lob bin = searchSql.toBinaryData(rs, lobStore, LobDao.this);
+					Lob bin = searchSql.toBinaryData(rs, lobStore, LobDao.this, manageLobSizeOnRdb);
 					res.add(bin);
 				}
 				rs.close();
@@ -211,7 +213,7 @@ public class LobDao {
 
 		return exec.execute(rdb, true).booleanValue();
 	}
-	
+
 	public boolean updateBinaryDataInfo(final int tenantId, final long lobId, final String name, final String type) {
 		SqlExecuter<Boolean> exec = new SqlExecuter<Boolean>() {
 
@@ -333,12 +335,12 @@ public class LobDao {
 		return exec.execute(rdb, true).booleanValue();
 	}
 
-	public void initLobData(final int tenantId, final long lobDataId) {
+	public void initLobData(final int tenantId, final long lobDataId, Long size) {
 		SqlExecuter<Integer> exec = new SqlExecuter<Integer>() {
 
 			@Override
 			public Integer logic() throws SQLException {
-				return getStatement().executeUpdate(lobStoreInsertSql.toSql(tenantId, lobDataId, rdb));
+				return getStatement().executeUpdate(lobStoreInsertSql.toSql(tenantId, lobDataId, size, rdb));
 			}
 		};
 
@@ -346,7 +348,7 @@ public class LobDao {
 	}
 
 	/**
-	 * 
+	 *
 	 * @param day
 	 * @param tenantId
 	 * @return LOB_ID,LOB_DATA_IDのリスト
@@ -372,13 +374,13 @@ public class LobDao {
 		return exec.execute(rdb, true);
 	}
 
-	public List<Long> getLobDataIdListForClean(final int tenantId) {
+	public List<Long> getLobDataIdListForClean(final int day, final int tenantId) {
 		SqlExecuter<List<Long>> exec = new SqlExecuter<List<Long>>() {
 
 			@Override
 			public List<Long> logic() throws SQLException {
 				List<Long> res = new ArrayList<Long>();
-				ResultSet rs = getStatement().executeQuery(lobStoreSearchSql.toSqlForClean(tenantId, rdb));
+				ResultSet rs = getStatement().executeQuery(lobStoreSearchSql.toSqlForClean(tenantId, day, rdb));
 				try {
 					while (rs.next()) {
 						res.add(rs.getLong(LobStoreTable.LOB_DATA_ID));
@@ -502,7 +504,7 @@ public class LobDao {
 	 * @param lobDataId LobDataId
 	 * @param size サイズ
 	 */
-	public void updateLobStoreSize(final int tenantId, final long lobDataId, final long size) {
+	public boolean updateLobStoreSize(final int tenantId, final long lobDataId, final long size) {
 		SqlExecuter<Boolean> exec = new SqlExecuter<Boolean>() {
 
 			@Override
@@ -516,6 +518,7 @@ public class LobDao {
 			}
 
 		};
-		exec.execute(rdb, true);
+		return exec.execute(rdb, true);
 	}
+
 }

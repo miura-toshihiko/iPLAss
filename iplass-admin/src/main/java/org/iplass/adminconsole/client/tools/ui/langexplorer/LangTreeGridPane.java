@@ -25,6 +25,8 @@ import java.util.Date;
 import java.util.List;
 
 import org.iplass.adminconsole.client.base.ui.widget.GridActionImgButton;
+import org.iplass.adminconsole.client.base.ui.widget.MtpTreeGrid;
+import org.iplass.adminconsole.client.base.ui.widget.MtpWidgetConstants;
 import org.iplass.adminconsole.client.base.util.SmartGWTUtil;
 import org.iplass.adminconsole.client.tools.data.metaexplorer.MetaDataTreeDS;
 import org.iplass.adminconsole.client.tools.data.metaexplorer.MetaDataTreeDS.FIELD_NAME;
@@ -61,7 +63,6 @@ import com.smartgwt.client.widgets.layout.SectionStack;
 import com.smartgwt.client.widgets.layout.SectionStackSection;
 import com.smartgwt.client.widgets.layout.VLayout;
 import com.smartgwt.client.widgets.tree.Tree;
-import com.smartgwt.client.widgets.tree.TreeGrid;
 import com.smartgwt.client.widgets.tree.TreeGridField;
 import com.smartgwt.client.widgets.tree.TreeNode;
 import com.smartgwt.client.widgets.tree.events.DataArrivedEvent;
@@ -72,7 +73,7 @@ public class LangTreeGridPane extends VLayout {
 	private AdvancedSearchExecHandler handler;
 
 	private MetaDataAdvancedSearchPane searchPane;
-	private MetaDataTreeGrid grid;
+	private LangMetaDataTreeGrid grid;
 
 	public LangTreeGridPane(AdvancedSearchExecHandler handler) {
 		this.handler = handler;
@@ -87,7 +88,7 @@ public class LangTreeGridPane extends VLayout {
 		advancedSearchSection.setExpanded(false);
 		advancedSearchSection.setResizeable(true);
 
-		grid = new MetaDataTreeGrid();
+		grid = new LangMetaDataTreeGrid();
 		grid.setCanDragResize(true);
 
 		SectionStackSection metaDataGridSection = new SectionStackSection();
@@ -145,8 +146,6 @@ public class LangTreeGridPane extends VLayout {
 	}
 
 	public class MetaDataAdvancedSearchPane extends VLayout {
-
-		private static final String SEARCH_ICON = "[SKIN]/actions/view.png";
 
 		private CheckboxItem updateDateField;
 		private DateItem updateDateFromField;
@@ -282,7 +281,7 @@ public class LangTreeGridPane extends VLayout {
 			tagFromSelectFiled.setStartRow(false);
 			tagFromSelectFiled.setEndRow(false);
 			tagFromSelectFiled.setTitle("");
-			tagFromSelectFiled.setIcon(SEARCH_ICON);
+			tagFromSelectFiled.setIcon(MtpWidgetConstants.ICON_SEARCH);
 			tagFromSelectFiled.setTooltip("Select Tag");
 			tagFromSelectFiled.addClickHandler(new com.smartgwt.client.widgets.form.fields.events.ClickHandler() {
 
@@ -322,7 +321,7 @@ public class LangTreeGridPane extends VLayout {
 			tagToSelectFiled.setStartRow(false);
 			tagToSelectFiled.setEndRow(false);
 			tagToSelectFiled.setTitle("");
-			tagToSelectFiled.setIcon(SEARCH_ICON);
+			tagToSelectFiled.setIcon(MtpWidgetConstants.ICON_SEARCH);
 			tagToSelectFiled.setTooltip("Select Tag");
 			tagToSelectFiled.addClickHandler(new com.smartgwt.client.widgets.form.fields.events.ClickHandler() {
 
@@ -368,7 +367,7 @@ public class LangTreeGridPane extends VLayout {
 
 			IButton advanceSearchBtn = new IButton();
 			advanceSearchBtn.setTitle("Search");
-			advanceSearchBtn.setIcon(SEARCH_ICON);
+			advanceSearchBtn.setIcon(MtpWidgetConstants.ICON_SEARCH);
 			advanceSearchBtn.addClickHandler(new ClickHandler() {
 
 				@Override
@@ -468,11 +467,13 @@ public class LangTreeGridPane extends VLayout {
 
 	}
 
-	public class MetaDataTreeGrid extends TreeGrid {
+	private class LangMetaDataTreeGrid extends MtpTreeGrid {
 
 		private static final String ERROR_ICON = "[SKINIMG]/actions/exclamation.png";
 
-		public MetaDataTreeGrid() {
+		public LangMetaDataTreeGrid() {
+			super(true);
+
 			setLeaveScrollbarGap(false);
 			setCanSort(false);
 			setCanFreezeFields(false);
@@ -643,7 +644,7 @@ public class LangTreeGridPane extends VLayout {
 
 		public List<String> getSelectedPathList() {
 			ListGridRecord[] records = getSelectedRecords(true);
-			List<String> selectPaths = new ArrayList<String>();
+			List<String> selectPaths = new ArrayList<>();
 			for (ListGridRecord record : records) {
 				String path = record.getAttribute(FIELD_NAME.PATH.name());
 				//Rootは除外

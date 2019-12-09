@@ -27,6 +27,7 @@ import org.iplass.adminconsole.annotation.MultiLang;
 import org.iplass.adminconsole.view.annotation.InputType;
 import org.iplass.adminconsole.view.annotation.MetaFieldInfo;
 import org.iplass.mtp.definition.LocalizedStringDefinition;
+import org.iplass.mtp.view.generic.HasNestProperty;
 import org.iplass.mtp.view.generic.Jsp;
 import org.iplass.mtp.view.generic.Jsps;
 import org.iplass.mtp.view.generic.ViewConst;
@@ -39,92 +40,23 @@ import org.iplass.mtp.view.generic.editor.NestProperty;
 @Jsps({
 	@Jsp(path="/jsp/gem/generic/element/section/ReferenceSection.jsp", key=ViewConst.DESIGN_TYPE_GEM)
 })
-public class ReferenceSection extends Section {
+public class ReferenceSection extends Section implements HasNestProperty {
 
 	/** SerialVersionUID */
 	private static final long serialVersionUID = -5340250243884655144L;
 
-	/** Entity定義名 */
+	/** 参照先Entity定義名 */
 	private String defintionName;
 
 	/** プロパティ名 */
 	private String propertyName;
-
-	/** タイトル */
-	@MetaFieldInfo(
-			displayName="タイトル",
-			displayNameKey="generic_element_section_ReferenceSection_titleDisplaNameKey",
-			description="セクションのタイトルを設定します。",
-			descriptionKey="generic_element_section_ReferenceSection_titleDescriptionKey",
-			useMultiLang=true
-	)
-	@MultiLang()
-	private String title;
-
-	/** 多言語設定情報 */
-	@MetaFieldInfo(
-			displayName="多言語設定",
-			displayNameKey="generic_element_section_ReferenceSection_localizedTitleListDisplaNameKey",
-			inputType=InputType.LANGUAGE
-	)
-	private List<LocalizedStringDefinition> localizedTitleList;
-
-	/** セクションの展開可否 */
-	@MetaFieldInfo(
-			displayName="初期表示時に展開",
-			displayNameKey="generic_element_section_ReferenceSection_expandableDisplaNameKey",
-			inputType=InputType.CHECKBOX,
-			description="セクションを初期展開するかを指定します。",
-			descriptionKey="generic_element_section_ReferenceSection_expandableDescriptionKey"
-	)
-	private boolean expandable;
-
-	/** id */
-	@MetaFieldInfo(
-			displayName="id",
-			displayNameKey="generic_element_section_ReferenceSection_idDisplaNameKey",
-			description="画面上で一意となるIDを設定してください。",
-			descriptionKey="generic_element_section_ReferenceSection_idDescriptionKey"
-	)
-	private String id;
-
-	/** クラス名 */
-	@MetaFieldInfo(
-			displayName="クラス名",
-			displayNameKey="generic_element_section_ReferenceSection_styleDisplaNameKey",
-			description="スタイルシートのクラス名を指定します。複数指定する場合は半角スペースで区切ってください。",
-			descriptionKey="generic_element_section_ReferenceSection_styleDescriptionKey"
-	)
-	private String style;
-
-	/** 列数 */
-	@MetaFieldInfo(
-			displayName="列数",
-			displayNameKey="generic_element_section_ReferenceSection_colNumDisplaNameKey",
-			inputType=InputType.NUMBER,
-			rangeCheck=true,
-			minRange=1,
-			description="セクションの列数を指定します。<br>" +
-					"なお、3列以上指定する場合は、レイアウトが崩れる可能性があるため注意してください。",
-			descriptionKey="generic_element_section_ReferenceSection_colNumDescriptionKey"
-	)
-	private int colNum;
-
-	/** リンクを表示するか */
-	@MetaFieldInfo(
-			displayName="リンクを表示するか",
-			displayNameKey="generic_element_section_ReferenceSection_showLinkDisplaNameKey",
-			inputType=InputType.CHECKBOX,
-			description="詳細画面でのページ内リンクを表示するかを指定します。",
-			descriptionKey="generic_element_section_ReferenceSection_showLinkDescriptionKey"
-	)
-	private boolean showLink;
 
 	/** 詳細編集非表示設定 */
 	@MetaFieldInfo(
 			displayName="詳細編集非表示設定",
 			displayNameKey="generic_element_section_ReferenceSection_hideDetailDisplaNameKey",
 			inputType=InputType.CHECKBOX,
+			displayOrder=200,
 			description="詳細編集で非表示にするかを設定します。",
 			descriptionKey="generic_element_section_ReferenceSection_hideDetailDescriptionKey"
 	)
@@ -135,34 +67,101 @@ public class ReferenceSection extends Section {
 			displayName="詳細表示非表示設定",
 			displayNameKey="generic_element_section_ReferenceSection_hideViewDisplaNameKey",
 			inputType=InputType.CHECKBOX,
+			displayOrder=210,
 			description="詳細表示で非表示にするかを設定します。",
 			descriptionKey="generic_element_section_ReferenceSection_hideViewDescriptionKey"
 	)
 	private boolean hideView;
 
-	/** 上部のコンテンツ */
-	@MetaFieldInfo(
-			displayName="上部のコンテンツ",
-			displayNameKey="generic_element_section_ReferenceSection_upperContentsDisplaNameKey",
-			description="セクションの上部に表示するコンテンツを設定します。<br>" +
-					"コンテンツの内容にHTMLタグを利用することも可能です。",
-			descriptionKey="generic_element_section_ReferenceSection_upperContentsDescriptionKey",
-			inputType=InputType.SCRIPT,
-			mode="html"
-	)
-	private String upperContents;
 
-	/** 下部のコンテンツ */
+
+
+	/** タイトル */
 	@MetaFieldInfo(
-			displayName="下部のコンテンツ",
-			displayNameKey="generic_element_section_ReferenceSection_lowerContentsDisplaNameKey",
-			description="セクションの下部に表示するコンテンツを設定します。<br>" +
-					"コンテンツの内容にHTMLタグを利用することも可能です。",
-			descriptionKey="generic_element_section_ReferenceSection_lowerContentsDescriptionKey",
-			inputType=InputType.SCRIPT,
-			mode="html"
+			displayName="タイトル",
+			displayNameKey="generic_element_section_ReferenceSection_titleDisplaNameKey",
+			description="セクションのタイトルを設定します。",
+			descriptionKey="generic_element_section_ReferenceSection_titleDescriptionKey",
+			inputType=InputType.MULTI_LANG,
+			multiLangField = "localizedTitleList",
+			displayOrder=300
 	)
-	private String lowerContents;
+	@MultiLang()
+	private String title;
+
+	/** 多言語設定情報 */
+	@MetaFieldInfo(
+			displayName="多言語設定",
+			displayNameKey="generic_element_section_ReferenceSection_localizedTitleListDisplaNameKey",
+			inputType=InputType.MULTI_LANG_LIST,
+			displayOrder=310
+	)
+	private List<LocalizedStringDefinition> localizedTitleList;
+
+	/** クラス名 */
+	@MetaFieldInfo(
+			displayName="クラス名",
+			displayNameKey="generic_element_section_ReferenceSection_styleDisplaNameKey",
+			displayOrder=320,
+			description="スタイルシートのクラス名を指定します。複数指定する場合は半角スペースで区切ってください。",
+			descriptionKey="generic_element_section_ReferenceSection_styleDescriptionKey"
+	)
+	private String style;
+
+
+
+
+	/** id */
+	@MetaFieldInfo(
+			displayName="id",
+			displayNameKey="generic_element_section_ReferenceSection_idDisplaNameKey",
+			displayOrder=400,
+			description="画面上で一意となるIDを設定してください。",
+			descriptionKey="generic_element_section_ReferenceSection_idDescriptionKey"
+	)
+	private String id;
+
+	/** セクションの展開可否 */
+	@MetaFieldInfo(
+			displayName="初期表示時に展開",
+			displayNameKey="generic_element_section_ReferenceSection_expandableDisplaNameKey",
+			inputType=InputType.CHECKBOX,
+			displayOrder=410,
+			description="セクションを初期展開するかを指定します。",
+			descriptionKey="generic_element_section_ReferenceSection_expandableDescriptionKey"
+	)
+	private boolean expandable;
+
+	/** リンクを表示するか */
+	@MetaFieldInfo(
+			displayName="リンクを表示するか",
+			displayNameKey="generic_element_section_ReferenceSection_showLinkDisplaNameKey",
+			inputType=InputType.CHECKBOX,
+			displayOrder=420,
+			description="詳細画面でのページ内リンクを表示するかを指定します。",
+			descriptionKey="generic_element_section_ReferenceSection_showLinkDescriptionKey"
+	)
+	private boolean showLink;
+
+
+
+
+	/** 列数 */
+	@MetaFieldInfo(
+			displayName="列数",
+			displayNameKey="generic_element_section_ReferenceSection_colNumDisplaNameKey",
+			inputType=InputType.NUMBER,
+			rangeCheck=true,
+			minRange=1,
+			displayOrder=1000,
+			description="セクションの列数を指定します。<br>" +
+					"なお、3列以上指定する場合は、レイアウトが崩れる可能性があるため注意してください。",
+			descriptionKey="generic_element_section_ReferenceSection_colNumDescriptionKey"
+	)
+	private int colNum;
+
+
+
 
 	/** 表示プロパティ */
 	@MetaFieldInfo(displayName="参照型の表示プロパティ",
@@ -170,6 +169,7 @@ public class ReferenceSection extends Section {
 			inputType=InputType.REFERENCE,
 			referenceClass=NestProperty.class,
 			multiple=true,
+			displayOrder=2000,
 			description="参照セクションに表示するプロパティを設定します。",
 			descriptionKey="generic_element_section_ReferenceSection_propertiesDescriptionKey"
 	)
@@ -186,7 +186,8 @@ public class ReferenceSection extends Section {
 					"<b>参照プロパティの多重度が1以外<b><br>" +
 					"指定したプロパティに設定された値とデータのインデックスが一致するデータを表示します。",
 			descriptionKey="generic_element_section_ReferenceSection_orderPropNameDescriptionKey",
-			inputType=InputType.PROPERTY
+			inputType=InputType.PROPERTY,
+			displayOrder=2010
 	)
 	private String orderPropName;
 
@@ -197,6 +198,7 @@ public class ReferenceSection extends Section {
 			inputType=InputType.NUMBER,
 			rangeCheck=true,
 			minRange=0,
+			displayOrder=2020,
 			description="このセクションに表示する参照データのインデックスを指定します。<br>" +
 					"<b>参照プロパティの多重度が1<b><br>" +
 					"使用しません。<br>" +
@@ -207,11 +209,55 @@ public class ReferenceSection extends Section {
 	)
 	private int index;
 
+
+
+
+	/** 更新時に強制的に更新処理を行う */
+	@MetaFieldInfo(
+			displayName="更新時に強制的に更新処理を行う",
+			displayNameKey="generic_element_section_ReferenceSection_forceUpadteDisplaNameKey",
+			inputType=InputType.CHECKBOX,
+			displayOrder=3000,
+			description="変更項目が一つもなくとも、強制的に更新処理（更新日時、更新者が更新される）を行います。",
+			descriptionKey="generic_element_section_ReferenceSection_forceUpadteDescriptionKey"
+	)
+	private boolean forceUpadte;
+
+
+
+
+	/** 上部のコンテンツ */
+	@MetaFieldInfo(
+			displayName="上部のコンテンツ",
+			displayNameKey="generic_element_section_ReferenceSection_upperContentsDisplaNameKey",
+			displayOrder=4000,
+			description="セクションの上部に表示するコンテンツを設定します。<br>" +
+					"コンテンツの内容にHTMLタグを利用することも可能です。",
+			descriptionKey="generic_element_section_ReferenceSection_upperContentsDescriptionKey",
+			inputType=InputType.SCRIPT,
+			mode="html"
+	)
+	private String upperContents;
+
+	/** 下部のコンテンツ */
+	@MetaFieldInfo(
+			displayName="下部のコンテンツ",
+			displayNameKey="generic_element_section_ReferenceSection_lowerContentsDisplaNameKey",
+			description="セクションの下部に表示するコンテンツを設定します。<br>" +
+					"コンテンツの内容にHTMLタグを利用することも可能です。",
+			descriptionKey="generic_element_section_ReferenceSection_lowerContentsDescriptionKey",
+			inputType=InputType.SCRIPT,
+			mode="html",
+			displayOrder=4010
+	)
+	private String lowerContents;
+
+
 	/** 上下コンテンツスクリプトのキー(内部用) */
 	private String contentScriptKey;
 
 	/**
-	 * Entity定義名を取得します。
+	 * 参照先Entity定義名を取得します。
 	 * @return Entity定義名
 	 */
 	public String getDefintionName() {
@@ -219,7 +265,7 @@ public class ReferenceSection extends Section {
 	}
 
 	/**
-	 * Entity定義名を設定します。
+	 * 参照先Entity定義名を設定します。
 	 * @param defintionName Entity定義名
 	 */
 	public void setDefintionName(String defintionName) {
@@ -371,6 +417,22 @@ public class ReferenceSection extends Section {
 	}
 
 	/**
+	 * 更新時に強制的に更新処理を行うかを取得します。
+	 * @return forceUpdate 更新時に強制的に更新処理を行うか
+	 */
+	public boolean isForceUpadte() {
+		return forceUpadte;
+	}
+
+	/**
+	 * 更新時に強制的に更新処理を行うかを設定します。
+	 * @param forceUpadte 更新時に強制的に更新処理を行うか
+	 */
+	public void setForceUpadte(boolean forceUpadte) {
+		this.forceUpadte = forceUpadte;
+	}
+
+	/**
 	 * 上部のコンテンツを取得します。
 	 * @return 上部のコンテンツ
 	 */
@@ -502,4 +564,10 @@ public class ReferenceSection extends Section {
 	public void setContentScriptKey(String contentScriptKey) {
 		this.contentScriptKey = contentScriptKey;
 	}
+
+	@Override
+	public String getEntityName() {
+		return defintionName;
+	}
+
 }

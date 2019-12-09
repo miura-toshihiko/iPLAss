@@ -24,6 +24,8 @@ import org.iplass.gem.command.auth.LoginCommand;
 import org.iplass.gem.command.auth.LogoutCommand;
 import org.iplass.gem.command.auth.ReAuthCommand;
 import org.iplass.gem.command.auth.ResetPasswordCommand;
+import org.iplass.gem.command.auth.ResetSpecificPasswordCommand;
+import org.iplass.gem.command.auth.RevokeApplicationCommand;
 import org.iplass.gem.command.auth.UpdateExpirePasswordCommand;
 import org.iplass.gem.command.auth.UpdatePasswordCommand;
 import org.iplass.gem.command.auth.UpdateUserCommand;
@@ -37,6 +39,12 @@ import org.iplass.gem.command.calendar.ref.CalendarFilterCommand;
 import org.iplass.gem.command.calendar.ref.GetCalendarFilterCommand;
 import org.iplass.gem.command.fulltext.FullTextSearchCommand;
 import org.iplass.gem.command.fulltext.FullTextSearchViewCommand;
+import org.iplass.gem.command.generic.bulk.BulkUpdateAllCommand;
+import org.iplass.gem.command.generic.bulk.BulkUpdateListCommand;
+import org.iplass.gem.command.generic.bulk.BulkUpdateViewCommand;
+import org.iplass.gem.command.generic.bulk.MultiBulkUpdateAllCommand;
+import org.iplass.gem.command.generic.bulk.MultiBulkUpdateListCommand;
+import org.iplass.gem.command.generic.bulk.MultiBulkUpdateViewCommand;
 import org.iplass.gem.command.generic.common.GetAutocompletionValueCommand;
 import org.iplass.gem.command.generic.common.GetEntityNameCommand;
 import org.iplass.gem.command.generic.common.GetEntityNameListCommand;
@@ -63,6 +71,7 @@ import org.iplass.gem.command.generic.refcombo.ReferenceComboCommand;
 import org.iplass.gem.command.generic.refcombo.SearchParentCommand;
 import org.iplass.gem.command.generic.reflink.GetReferenceLinkItemCommand;
 import org.iplass.gem.command.generic.reftree.SearchTreeDataCommand;
+import org.iplass.gem.command.generic.refunique.GetReferenceUniqueItemCommand;
 import org.iplass.gem.command.generic.search.CountCommand;
 import org.iplass.gem.command.generic.search.CsvDownloadCommand;
 import org.iplass.gem.command.generic.search.DetailSearchCommand;
@@ -126,6 +135,12 @@ import org.iplass.mtp.command.annotation.MetaDataSeeAlso;
 	UpdateMappedbyReferenceCommand.class,
 	UpdateReferencePropertyCommand.class,
 	UpdateTableOrderCommand.class,
+	BulkUpdateViewCommand.class,
+	BulkUpdateAllCommand.class,
+	BulkUpdateListCommand.class,
+	MultiBulkUpdateViewCommand.class,
+	MultiBulkUpdateAllCommand.class,
+	MultiBulkUpdateListCommand.class,
 	//自動補完
 	GetAutocompletionValueCommand.class,
 	//参照コンボ
@@ -136,6 +151,8 @@ import org.iplass.mtp.command.annotation.MetaDataSeeAlso;
 	SearchTreeDataCommand.class,
 	//連動プロパティ
 	GetReferenceLinkItemCommand.class,
+	//参照ユニークキー
+	GetReferenceUniqueItemCommand.class,
 	//お知らせ
 	InformationListCommand.class,
 	InformationViewCommand.class,
@@ -173,8 +190,10 @@ import org.iplass.mtp.command.annotation.MetaDataSeeAlso;
 	UpdatePasswordCommand.class,
 	UpdateExpirePasswordCommand.class,
 	ResetPasswordCommand.class,
+	ResetSpecificPasswordCommand.class,
 	UpdateUserCommand.class,
 	ReAuthCommand.class,
+	RevokeApplicationCommand.class,
 	//プレビュー日付
 	GetPreviewDateTimeCommand.class,
 	SetPreviewDateTimeCommand.class,

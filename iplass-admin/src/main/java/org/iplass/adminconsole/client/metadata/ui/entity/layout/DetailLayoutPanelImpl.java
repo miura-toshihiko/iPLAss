@@ -27,8 +27,10 @@ import java.util.List;
 import org.iplass.adminconsole.client.base.event.MTPEvent;
 import org.iplass.adminconsole.client.base.event.MTPEventHandler;
 import org.iplass.adminconsole.client.base.i18n.AdminClientMessageUtil;
+import org.iplass.adminconsole.client.base.rpc.AdminAsyncCallback;
 import org.iplass.adminconsole.client.base.tenant.TenantInfoHolder;
 import org.iplass.adminconsole.client.base.util.SmartGWTUtil;
+import org.iplass.adminconsole.client.metadata.data.entity.layout.ViewType;
 import org.iplass.adminconsole.client.metadata.ui.MetaDataItemMenuTreeNode;
 import org.iplass.adminconsole.client.metadata.ui.MetaDataMainEditPane;
 import org.iplass.adminconsole.client.metadata.ui.common.MetaCommonAttributeSection;
@@ -37,7 +39,7 @@ import org.iplass.adminconsole.client.metadata.ui.common.MetaDataHistoryDialog;
 import org.iplass.adminconsole.client.metadata.ui.common.MetaDataUpdateCallback;
 import org.iplass.adminconsole.client.metadata.ui.common.StatusCheckUtil;
 import org.iplass.adminconsole.client.metadata.ui.entity.EntityPlugin;
-import org.iplass.adminconsole.client.metadata.ui.entity.layout.item.DetailFormViewWindow;
+import org.iplass.adminconsole.client.metadata.ui.entity.layout.item.DetailFormViewControl;
 import org.iplass.adminconsole.shared.metadata.dto.AdminDefinitionModifyResult;
 import org.iplass.adminconsole.shared.metadata.rpc.MetaDataServiceAsync;
 import org.iplass.adminconsole.shared.metadata.rpc.MetaDataServiceFactory;
@@ -77,19 +79,16 @@ public class DetailLayoutPanelImpl extends MetaDataMainEditPane implements Detai
 
 	private String curDefinitionId;
 
-	/** 編集終了イベントハンドラ */
-	private MTPEventHandler editEndHandler;
-
 	/** ヘッダ部分 */
 	private MetaCommonHeaderPane headerPane;
 	/** 共通属性部分 */
-	private MetaCommonAttributeSection commonSection;
+	private MetaCommonAttributeSection<EntityView> commonSection;
 
 
 	/** メニュー部分のレイアウト */
 	private EntityViewMenuPane viewMenuPane;
 
-	private DetailFormViewWindow form;
+	private DetailFormViewControl form;
 
 	public DetailLayoutPanelImpl() {
 	}
@@ -121,7 +120,7 @@ public class DetailLayoutPanelImpl extends MetaDataMainEditPane implements Detai
 		});
 
 		//共通属性
-		commonSection = new MetaCommonAttributeSection(targetNode, EntityView.class);
+		commonSection = new MetaCommonAttributeSection<>(targetNode, EntityView.class);
 
 		//View編集画面
 		VLayout viewEditPane = new VLayout();
@@ -140,13 +139,13 @@ public class DetailLayoutPanelImpl extends MetaDataMainEditPane implements Detai
 		layout.setWidth100();
 
 		//編集用のエリア
-		form = new DetailFormViewWindow(defName);
+		form = new DetailFormViewControl(defName);
 		form.setShowResizeBar(true);
 		form.setResizeBarTarget("next");	//リサイズバーをダブルクリックした際、次を収縮
 		layout.addMember(form);
 
 		//ドラッグエリア
-		DragPane dragArea = new DragPane(defName);
+		EntityViewDragPane dragArea = new EntityViewDragPane(defName, false, ViewType.DETAIL);
 		layout.addMember(dragArea);
 
 		viewEditPane.addMember(viewMenuPane);
@@ -187,22 +186,6 @@ public class DetailLayoutPanelImpl extends MetaDataMainEditPane implements Detai
 	}
 
 	/**
-	 * 編集開始イベント設定。
-	 * @param handler
-	 */
-	public void setEditStartHandler(MTPEventHandler handler) {
-		form.setEditStartHandler(handler);
-	}
-
-	/**
-	 * 編集終了イベント設定。
-	 * @param handler
-	 */
-	public void setEditEndHandler(MTPEventHandler handler) {
-		editEndHandler = handler;
-	}
-
-	/**
 	 * Viewをリセット。
 	 */
 	private void reset() {
@@ -224,11 +207,6 @@ public class DetailLayoutPanelImpl extends MetaDataMainEditPane implements Detai
 
 		//SharedConfigの再表示
 		commonSection.refreshSharedConfig();
-
-		if (editEndHandler != null) {
-			editEndHandler.execute(new MTPEvent());
-		}
-
 	}
 
 	/**
@@ -242,21 +220,17 @@ public class DetailLayoutPanelImpl extends MetaDataMainEditPane implements Detai
 	/**
 	 * 初期化読込処理
 	 */
-	private final class LoadAsyncCallback implements AsyncCallback<DefinitionEntry> {
-		@Override
-		public void onFailure(Throwable caught) {
-			SC.warn(AdminClientMessageUtil.getString("ui_metadata_entity_layout_DetailLayoutPane_failedGetScreenInfo") + caught.getMessage());
-			GWT.log(caught.toString(), caught);
-		}
+	private final class LoadAsyncCallback extends AdminAsyncCallback<DefinitionEntry> {
 
 		@Override
 		public void onSuccess(DefinitionEntry entry) {
 
 			if (entry == null || entry.getDefinition() == null) {
 				//共通属性（Entityからコピー）
-				commonSection.setName(ed.getName());
-				commonSection.setDisplayName(ed.getDisplayName());
-				//commonSection.setDescription(ed.getDescription());
+				EntityView copy = new EntityView();
+				copy.setName(ed.getName());
+				copy.setDisplayName(ed.getDisplayName());
+				commonSection.setDefinition(copy);
 
 				//まだ未保存なのでShared設定利用不可
 				commonSection.setSharedEditDisabled(true);
@@ -271,10 +245,7 @@ public class DetailLayoutPanelImpl extends MetaDataMainEditPane implements Detai
 			curVersion = entry.getDefinitionInfo().getVersion();
 			curDefinitionId = entry.getDefinitionInfo().getObjDefId();
 
-			//共通属性
-			commonSection.setName(curDefinition.getName());
-			commonSection.setDisplayName(curDefinition.getDisplayName());
-			commonSection.setDescription(curDefinition.getDescription());
+			commonSection.setDefinition(curDefinition);
 
 			//保存されているのでShared設定利用可能
 			commonSection.setSharedEditDisabled(false);
@@ -339,10 +310,7 @@ public class DetailLayoutPanelImpl extends MetaDataMainEditPane implements Detai
 					//View定義を新規作成
 					EntityView tmp = new EntityView();
 
-					tmp.setName(commonSection.getName());
-					tmp.setDisplayName(commonSection.getDisplayName());
-					tmp.setDescription(commonSection.getDescription());
-
+					commonSection.getEditDefinition(tmp);
 					tmp.setDefinitionName(defName);
 
 					if (fv.getName() == null) {
@@ -355,10 +323,7 @@ public class DetailLayoutPanelImpl extends MetaDataMainEditPane implements Detai
 				} else {
 					//View定義を更新
 
-					ev.setName(commonSection.getName());
-					ev.setDisplayName(commonSection.getDisplayName());
-					ev.setDescription(commonSection.getDescription());
-
+					commonSection.getEditDefinition(ev);
 					ev.setDefinitionName(defName);
 
 					if (fv.getName() == null) {
@@ -392,10 +357,6 @@ public class DetailLayoutPanelImpl extends MetaDataMainEditPane implements Detai
 					SC.say(AdminClientMessageUtil.getString("ui_metadata_entity_layout_DetailLayoutPane_completion"),
 							AdminClientMessageUtil.getString("ui_metadata_entity_layout_DetailLayoutPane_saveDetailLayoutComp"));
 
-					if (editEndHandler != null) {
-						editEndHandler.execute(new MTPEvent());
-					}
-
 					//ステータスチェック
 					StatusCheckUtil.statuCheck(EntityView.class.getName(), defName.replace(".", "/"), DetailLayoutPanelImpl.this);
 
@@ -419,10 +380,6 @@ public class DetailLayoutPanelImpl extends MetaDataMainEditPane implements Detai
 					//追加成功
 					SC.say(AdminClientMessageUtil.getString("ui_metadata_entity_layout_DetailLayoutPane_completion"),
 							AdminClientMessageUtil.getString("ui_metadata_entity_layout_DetailLayoutPane_saveDetailLayoutComp"));
-
-					if (editEndHandler != null) {
-						editEndHandler.execute(new MTPEvent());
-					}
 
 					//ステータスチェック
 					StatusCheckUtil.statuCheck(EntityView.class.getName(), defName.replace(".", "/"), DetailLayoutPanelImpl.this);
@@ -498,7 +455,7 @@ public class DetailLayoutPanelImpl extends MetaDataMainEditPane implements Detai
 		/**
 		 * 指定Viewの表示処理
 		 */
-		private final class DisplayAsyncCallback implements AsyncCallback<EntityView> {
+		private final class DisplayAsyncCallback extends AdminAsyncCallback<EntityView> {
 
 			@Override
 			public void onSuccess(EntityView ev) {
@@ -523,12 +480,6 @@ public class DetailLayoutPanelImpl extends MetaDataMainEditPane implements Detai
 				}
 				apply(fv);
 			}
-
-			@Override
-			public void onFailure(Throwable caught) {
-				SC.warn(AdminClientMessageUtil.getString("ui_metadata_entity_layout_DetailLayoutPane_failedReadScreenInfo") + caught.getMessage());
-				GWT.log(caught.toString(), caught);
-			}
 		}
 	}
 
@@ -539,7 +490,7 @@ public class DetailLayoutPanelImpl extends MetaDataMainEditPane implements Detai
 
 		@Override
 		public void onClick(ClickEvent event) {
-			service.getDefinition(TenantInfoHolder.getId(), EntityView.class.getName(), defName, new AsyncCallback<EntityView>() {
+			service.getDefinition(TenantInfoHolder.getId(), EntityView.class.getName(), defName, new AdminAsyncCallback<EntityView>() {
 
 				@Override
 				public void onSuccess(EntityView result) {
@@ -550,11 +501,6 @@ public class DetailLayoutPanelImpl extends MetaDataMainEditPane implements Detai
 					}
 				}
 
-				@Override
-				public void onFailure(Throwable caught) {
-					SC.warn(AdminClientMessageUtil.getString("ui_metadata_entity_layout_DetailLayoutPane_failedReadScreenInfo") + caught.getMessage());
-					GWT.log(caught.toString(), caught);
-				}
 			});
 		}
 
@@ -643,7 +589,7 @@ public class DetailLayoutPanelImpl extends MetaDataMainEditPane implements Detai
 		/**
 		 * 削除開始
 		 */
-		private final class DeleteStartAsyncCallback implements AsyncCallback<EntityView> {
+		private final class DeleteStartAsyncCallback extends AdminAsyncCallback<EntityView> {
 
 			@Override
 			public void onSuccess(EntityView ev) {
@@ -670,9 +616,7 @@ public class DetailLayoutPanelImpl extends MetaDataMainEditPane implements Detai
 				}
 
 				if (ev.getViews().size() > 0) {
-					ev.setName(commonSection.getName());
-					ev.setDisplayName(commonSection.getDisplayName());
-					ev.setDescription(commonSection.getDescription());
+					commonSection.getEditDefinition(ev);
 					ev.setDefinitionName(defName);
 					updateEntityView(ev, true);
 				} else {
@@ -680,11 +624,6 @@ public class DetailLayoutPanelImpl extends MetaDataMainEditPane implements Detai
 				}
 			}
 
-			@Override
-			public void onFailure(Throwable caught) {
-				SC.warn(AdminClientMessageUtil.getString("ui_metadata_entity_layout_DetailLayoutPane_failedReadScreenInfo") + caught.getMessage());
-				GWT.log(caught.toString(), caught);
-			}
 		}
 
 		private void updateEntityView(final EntityView  definition, boolean checkVersion) {
@@ -812,7 +751,7 @@ public class DetailLayoutPanelImpl extends MetaDataMainEditPane implements Detai
 
 		@Override
 		public void onClick(ClickEvent event) {
-			service.getDefinition(TenantInfoHolder.getId(), EntityView.class.getName(), defName, new AsyncCallback<EntityView>() {
+			service.getDefinition(TenantInfoHolder.getId(), EntityView.class.getName(), defName, new AdminAsyncCallback<EntityView>() {
 
 				@Override
 				public void onSuccess(EntityView result) {
@@ -821,12 +760,6 @@ public class DetailLayoutPanelImpl extends MetaDataMainEditPane implements Detai
 					} else {
 						SC.say(AdminClientMessageUtil.getString("ui_metadata_entity_layout_DetailLayoutPane_defaultViewCreateCaution"));
 					}
-				}
-
-				@Override
-				public void onFailure(Throwable caught) {
-					SC.warn(AdminClientMessageUtil.getString("ui_metadata_entity_layout_DetailLayoutPane_failedReadScreenInfo") + caught.getMessage());
-					GWT.log(caught.toString(), caught);
 				}
 			});
 		}

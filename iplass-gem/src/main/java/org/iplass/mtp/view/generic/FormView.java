@@ -1,19 +1,19 @@
 /*
  * Copyright (C) 2011 INFORMATION SERVICES INTERNATIONAL - DENTSU, LTD. All Rights Reserved.
- * 
+ *
  * Unless you have purchased a commercial license,
  * the following license terms apply:
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
  * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
@@ -28,6 +28,7 @@ import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlSeeAlso;
 
 import org.iplass.adminconsole.annotation.MultiLang;
+import org.iplass.adminconsole.view.annotation.FieldOrder;
 import org.iplass.adminconsole.view.annotation.InputType;
 import org.iplass.adminconsole.view.annotation.MetaFieldInfo;
 import org.iplass.adminconsole.view.annotation.Refrectable;
@@ -42,7 +43,8 @@ import org.iplass.mtp.view.generic.element.section.Section;
  *
  */
 @XmlAccessorType(XmlAccessType.FIELD)
-@XmlSeeAlso({DetailFormView.class, SearchFormView.class})
+@XmlSeeAlso({DetailFormView.class, SearchFormView.class, BulkFormView.class})
+@FieldOrder(manual=true)
 public abstract class FormView implements Refrectable {
 
 	/** シリアルバージョンID */
@@ -56,9 +58,15 @@ public abstract class FormView implements Refrectable {
 	private List<Section> sections;
 
 	/** タイトル */
-	@MetaFieldInfo(displayName="画面タイトル", description="画面に表示されるタイトルを入力します",
-			displayNameKey="generic_FormView_titleDisplaNameKey", descriptionKey="generic_FormView_titleDescriptionKey",
-			useMultiLang=true)
+	@MetaFieldInfo(
+			displayName="画面タイトル",
+			description="画面に表示されるタイトルを入力します",
+			displayNameKey="generic_FormView_titleDisplaNameKey",
+			descriptionKey="generic_FormView_titleDescriptionKey",
+			inputType=InputType.MULTI_LANG,
+			multiLangField = "localizedTitleList",
+			displayOrder=10
+	)
 	@MultiLang(itemNameGetter = "getName")
 	private String title;
 
@@ -66,34 +74,47 @@ public abstract class FormView implements Refrectable {
 	@MetaFieldInfo(
 			displayName="多言語設定情報",
 			displayNameKey="generic_FormView_localizedTitleListDisplaNameKey",
-			inputType=InputType.LANGUAGE
+			inputType=InputType.MULTI_LANG_LIST,
+			displayOrder=20
 	)
 	private List<LocalizedStringDefinition> localizedTitleList;
 
-	/** 物理削除するかどうか */
-	@MetaFieldInfo(displayName="物理削除するか", inputType=InputType.CHECKBOX, description="物理削除を行うかを設定します。",
-			displayNameKey="generic_FormView_isPurgeDisplaNameKey", descriptionKey="generic_FormView_isPurgeDescriptionKey")
-	private boolean isPurge;
 
-	/** データを多言語化するかどうか */
-	@MetaFieldInfo(displayName="データを多言語化", inputType=InputType.CHECKBOX, description="データを多言語化するかを設定します。",
-			displayNameKey="generic_FormView_localizationDataDisplaNameKey", descriptionKey="generic_FormView_localizationDataDescriptionKey")
-	private boolean localizationData;
 
-	/** ダイアログ表示時に最大化 */
-	@MetaFieldInfo(displayName="ダイアログ表示時に最大化", inputType=InputType.CHECKBOX, description="ダイアログ表示時に最大化するかを設定します。",
-			displayNameKey="generic_FormView_dialogMaximizeDisplaNameKey", descriptionKey="generic_FormView_dialogMaximizeDescriptionKey")
-	private boolean dialogMaximize;
 
 	/** イメージカラー */
-	@MetaFieldInfo(displayName="イメージカラー", inputType=InputType.TEXT, description="ビューのイメージカラーを選択します。",
-			displayNameKey="generic_FormView_imageColorDisplaNameKey", descriptionKey="generic_FormView_imageColorDescriptionKey")
+	@MetaFieldInfo(
+			displayName="イメージカラー",
+			inputType=InputType.TEXT,
+			description="ビューのイメージカラーを選択します。",
+			displayNameKey="generic_FormView_imageColorDisplaNameKey",
+			descriptionKey="generic_FormView_imageColorDescriptionKey",
+			displayOrder=100
+	)
 	private String imageColor;
 
 	/** アイコンタグ */
-	@MetaFieldInfo(displayName="アイコンタグ", description="タイトルの前に表示するiタグ等を利用した独自のアイコンを設定できます。",
-			displayNameKey="generic_FormView_iconTagDisplaNameKey", descriptionKey="generic_FormView_iconTagDescriptionKey")
+	@MetaFieldInfo(
+			displayName="アイコンタグ",
+			description="タイトルの前に表示するiタグ等を利用した独自のアイコンを設定できます。",
+			displayNameKey="generic_FormView_iconTagDisplaNameKey",
+			descriptionKey="generic_FormView_iconTagDescriptionKey",
+			displayOrder=110
+	)
 	private String iconTag;
+
+	/** ダイアログ表示時に最大化 */
+	@MetaFieldInfo(
+			displayName="ダイアログ表示時に最大化",
+			inputType=InputType.CHECKBOX,
+			displayOrder=120,
+			description="ダイアログ表示時に最大化するかを設定します。",
+			displayNameKey="generic_FormView_dialogMaximizeDisplaNameKey",
+			descriptionKey="generic_FormView_dialogMaximizeDescriptionKey")
+	private boolean dialogMaximize;
+
+
+
 
 	/** ボタン */
 	@MetaFieldInfo(
@@ -102,11 +123,25 @@ public abstract class FormView implements Refrectable {
 			inputType=InputType.REFERENCE,
 			multiple=true,
 			referenceClass=Button.class,
+			displayOrder=1000,
 			description="編集画面上下にカスタムボタンを設定します",
 			descriptionKey="generic_FormView_buttonsDescriptionKey"
 	)
 	@MultiLang(itemNameGetter = "getName", isMultiLangValue = false)
 	private List<Button> buttons;
+
+
+
+
+	/** データを多言語化するかどうか */
+	@MetaFieldInfo(
+			displayName="データを多言語化",
+			inputType=InputType.CHECKBOX,
+			displayOrder=1500,
+			description="データを多言語化するかを設定します。",
+			displayNameKey="generic_FormView_localizationDataDisplaNameKey",
+			descriptionKey="generic_FormView_localizationDataDescriptionKey")
+	private boolean localizationData;
 
 	/** カスタムスタイルキー */
 	private String scriptKey;
@@ -166,22 +201,6 @@ public abstract class FormView implements Refrectable {
 	 */
 	public void setTitle(String title) {
 		this.title = title;
-	}
-
-	/**
-	 * 物理削除するかどうかを取得します。
-	 * @return 物理削除するかどうか
-	 */
-	public boolean isPurge() {
-	    return isPurge;
-	}
-
-	/**
-	 * 物理削除するかどうかを設定します。
-	 * @param isPurge 物理削除するかどうか
-	 */
-	public void setPurge(boolean isPurge) {
-	    this.isPurge = isPurge;
 	}
 
 	/**

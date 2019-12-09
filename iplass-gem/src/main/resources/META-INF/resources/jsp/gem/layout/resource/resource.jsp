@@ -37,36 +37,7 @@
 	if (StringUtil.isEmpty(language)) {
 		language = "ja";
 	}
-
-	String serverDateFormat = TemplateUtil.getLocaleFormat().getServerDateFormat();
-	if (StringUtil.isEmpty(serverDateFormat)) {
-		serverDateFormat = "yyyyMMdd";
-	}
-
-	String serverTimeFormat = TemplateUtil.getLocaleFormat().getServerTimeFormat();
-	if (StringUtil.isEmpty(serverTimeFormat)) {
-		serverTimeFormat = "HHmmssSSS";
-	}
-
-	String outputDateFormat = TemplateUtil.getLocaleFormat().getOutputDateFormat();
-	if (StringUtil.isEmpty(outputDateFormat)) {
-		outputDateFormat = "yyyy/MM/dd";
-	}
-
-	String outputTimeSecFormat = TemplateUtil.getLocaleFormat().getOutputTimeSecFormat();
-	if (StringUtil.isEmpty(outputTimeSecFormat)) {
-		outputTimeSecFormat = "HH:mm:ss";
-	}
-
-	String inputDateFormat = TemplateUtil.getLocaleFormat().getBrowserInputDateFormat();
-	if (StringUtil.isEmpty(inputDateFormat)) {
-		inputDateFormat = "yyyy/MM/dd";
-	}
-
-	String inputTimeSecFormat = TemplateUtil.getLocaleFormat().getBrowserInputTimeSecFormat();
-	if (StringUtil.isEmpty(inputTimeSecFormat)) {
-		inputTimeSecFormat = "HH:mm:ss";
-	}
+	request.setAttribute("language", language);
 %>
 <script>
 contentPath = "${staticContentPath}";
@@ -74,17 +45,18 @@ contextPath = "${m:tcPath()}";
 sysdate = "<%=DateUtil.getSimpleDateFormat("yyyyMMddHHmmss", true).format(TemplateUtil.getCurrentTimestamp())%>";
 scriptContext = {};
 document.scriptContext = scriptContext;
-scriptContext.locale = {};
-scriptContext.locale.defaultLocale = "<%=language%>";
-scriptContext.locale.serverDateFormat = "<%=serverDateFormat%>";
-scriptContext.locale.serverTimeFormat = "<%=serverTimeFormat%>";
-scriptContext.locale.outputDateFormat = "<%=outputDateFormat%>";
-scriptContext.locale.outputTimeSecFormat = "<%=outputTimeSecFormat%>";
-scriptContext.locale.inputDateFormat = "<%=inputDateFormat%>";
-scriptContext.locale.inputTimeSecFormat = "<%=inputTimeSecFormat%>";
-scriptContext.locale.showPulldownPleaseSelectLabel = <%=ViewUtil.isShowPulldownPleaseSelectLabel()%>;
+scriptContext.gem = {};
+scriptContext.gem.showPulldownPleaseSelectLabel = <%=ViewUtil.isShowPulldownPleaseSelectLabel()%>;
 dType="/gem";
 </script>
+
+<%@include file="./locale.jsp" %>
+
+<%-- For compatibility before 3.0.12  --%>
+<script>
+scriptContext.locale.showPulldownPleaseSelectLabel = <%=ViewUtil.isShowPulldownPleaseSelectLabel()%>;
+</script>
+
 <script src="${staticContentPath}/webjars/jquery/3.2.1/jquery.min.js?cv=${apiVersion}"></script>
 <script src="${staticContentPath}/webjars/jquery-ui/1.12.1/jquery-ui.min.js?cv=${apiVersion}"></script>
 <script src="${staticContentPath}/scripts/gem/functions.js?cv=${apiVersion}"></script>
@@ -97,19 +69,20 @@ dType="/gem";
 <script src="${staticContentPath}/webjars/jQuery-Timepicker-Addon/1.6.3/jquery-ui-sliderAccess.js?cv=${apiVersion}"></script>
 <script src="${staticContentPath}/webjars/jQuery-contextMenu/2.6.2/dist/jquery.contextMenu.js?cv=${apiVersion}"></script>
 <script src="${staticContentPath}/webjars/momentjs/2.18.1/min/moment-with-locales.js?cv=${apiVersion}"></script>
-<script src="${staticContentPath}/scripts/gem/locale-<%=language%>.js?cv=${apiVersion}"></script>
-<script src="${staticContentPath}/webjars/free-jqgrid/4.14.1/js/i18n/min/grid.locale-<%=language%>.js?cv=${apiVersion}"></script>
+<script src="${staticContentPath}/webjars/free-jqgrid/4.14.1/js/i18n/min/grid.locale-${language}.js?cv=${apiVersion}"></script>
 <script src="${staticContentPath}/webjars/font-awesome/5.0.9/svg-with-js/js/fontawesome-all.min.js?cv=${apiVersion}"></script>
 <%
 	if (!"en".equals(language)) {
 		//enの場合はデフォルトを利用
 %>
-<script src="${staticContentPath}/webjars/jquery-ui-src/1.11.4/ui/i18n/datepicker-<%=language %>.js?cv=${apiVersion}"></script>
-<script src="${staticContentPath}/webjars/jQuery-Timepicker-Addon/1.6.3/i18n/jquery-ui-timepicker-<%=language %>.js?cv=${apiVersion}"></script>
+<script src="${staticContentPath}/webjars/jquery-ui/1.12.1/ui/minified/i18n/datepicker-${language}.js?cv=${apiVersion}"></script>
+<script src="${staticContentPath}/webjars/jQuery-Timepicker-Addon/1.6.3/i18n/jquery-ui-timepicker-${language}.js?cv=${apiVersion}"></script>
 <%
 	}
 %>
-<link rel="stylesheet" href="${staticContentPath}/webjars/jquery-ui/1.12.1/jquery-ui.css?cv=${apiVersion}" />
+<script src="${staticContentPath}/scripts/gem/plugin/jQuery-Timepicker-Addon/jquery-ui-timepicker-addon-mtp.js?cv=${apiVersion}"></script>
+
+<link rel="stylesheet" href="${staticContentPath}/webjars/jquery-ui/1.12.1/themes/base/jquery-ui.min.css?cv=${apiVersion}" />
 <link rel="stylesheet" href="${staticContentPath}/webjars/free-jqgrid/4.14.1/css/ui.jqgrid.min.css?cv=${apiVersion}" />
 <link rel="stylesheet" href="${staticContentPath}/webjars/free-jqgrid/4.14.1/plugins/css/ui.multiselect.min.css?cv=${apiVersion}" />
 <link rel="stylesheet" href="${staticContentPath}/webjars/jqtree/1.4.2/jqtree.css?cv=${apiVersion}" />

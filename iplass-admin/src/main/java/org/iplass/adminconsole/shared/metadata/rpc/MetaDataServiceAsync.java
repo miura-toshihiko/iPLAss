@@ -24,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.iplass.adminconsole.shared.base.dto.KeyValue;
 import org.iplass.adminconsole.shared.base.dto.i18n.I18nMetaDisplayInfo;
 import org.iplass.adminconsole.shared.metadata.dto.AdminDefinitionModifyResult;
 import org.iplass.adminconsole.shared.metadata.dto.MetaDataInfo;
@@ -44,6 +45,7 @@ import org.iplass.mtp.definition.SharedConfig;
 import org.iplass.mtp.entity.Entity;
 import org.iplass.mtp.entity.definition.EntityDefinition;
 import org.iplass.mtp.entity.definition.PropertyDefinition;
+import org.iplass.mtp.view.generic.BulkFormView;
 import org.iplass.mtp.view.generic.DetailFormView;
 import org.iplass.mtp.view.generic.SearchFormView;
 import org.iplass.mtp.view.menu.MenuItem;
@@ -81,6 +83,21 @@ public interface MetaDataServiceAsync {
 	 * @param callback  Callbackクラス
 	 */
 	void clearAllCache(int tenantId, AsyncCallback<Void> callback);
+
+	/**
+	 * キャッシュとして保持しているActionのコンテンツキャッシュをクリアします。
+	 *
+	 * @param tenantId テナントID
+	 * @param actionName アクション名
+	 */
+	void clearActionCache(int tenantId, String actionName, AsyncCallback<Void> callback);
+
+	/**
+	 * キャッシュとして保持しているActionのコンテンツキャッシュをクリアします。
+	 *
+	 * @param tenantId テナントID
+	 */
+	void clearTenantActionCache(int tenantId, AsyncCallback<Void> callback);
 
 	void updateSharedConfig(int tenantId, String className, String name, SharedConfig config, AsyncCallback<Void> callback);
 
@@ -210,9 +227,9 @@ public interface MetaDataServiceAsync {
 
 	void getEntityStoreSpaceList(int tenantId, AsyncCallback<List<String>> callback);
 
-	void getAutoNumberCurrentValue(int tenantId, String name, String propertyName, AsyncCallback<Long> callback);
+	void getAutoNumberCurrentValueList(int tenantId, String name, String propertyName, AsyncCallback<List<KeyValue<String, Long>>> callback);
 
-	void resetAutoNumberCounter(int tenantId, String name, String propertyName, long startsWith, AsyncCallback<Void> callback);
+	void resetAutoNumberCounterList(int tenantId, String name, String propertyName, List<KeyValue<String, Long>> values, AsyncCallback<Void> callback);
 
 	void getSortInfo(int tenantId, String orderBy, AsyncCallback<List<SortInfo>> callback);
 
@@ -227,6 +244,8 @@ public interface MetaDataServiceAsync {
 	void createDefaultSearchFormView(int tenantId, String name, AsyncCallback<SearchFormView> callback);
 
 	void createDefaultDetailFormView(int tenantId, String name, AsyncCallback<DetailFormView> callback);
+
+	void createDefaultBulkFormView(int tenantId, String name, AsyncCallback<BulkFormView> callback);
 
 	void getRoles(int tenantId, AsyncCallback<List<Entity>> callback);
 
@@ -435,4 +454,17 @@ public interface MetaDataServiceAsync {
 	 * @param callback  Callbackクラス
 	 */
 	void getImageColorList(int tenantId, AsyncCallback<List<String>> callback);
+
+	/* ---------------------------------------
+	 * OAuth
+	 --------------------------------------- */
+
+	void generateCredentialOAuthClient(final int tenantId, final String definitionName, AsyncCallback<String> callback);
+
+	void deleteOldCredentialOAuthClient(final int tenantId, final String definitionName, AsyncCallback<Void> callback);
+
+	void generateCredentialOAuthResourceServer(final int tenantId, final String definitionName, AsyncCallback<String> callback);
+
+	void deleteOldCredentialOAuthResourceServer(final int tenantId, final String definitionName, AsyncCallback<Void> callback);
+
 }

@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
 import org.iplass.gem.command.Constants;
 import org.iplass.mtp.command.RequestContext;
 import org.iplass.mtp.entity.Entity;
+import org.iplass.mtp.entity.csv.MultipleFormat;
 import org.iplass.mtp.entity.definition.EntityDefinition;
 import org.iplass.mtp.entity.definition.PropertyDefinition;
 import org.iplass.mtp.entity.definition.properties.BinaryProperty;
@@ -40,6 +41,8 @@ import org.iplass.mtp.entity.query.Select;
 import org.iplass.mtp.entity.query.Where;
 import org.iplass.mtp.util.StringUtil;
 import org.iplass.mtp.view.generic.EntityView;
+import org.iplass.mtp.view.generic.EntityViewUtil;
+import org.iplass.mtp.view.generic.OutputType;
 import org.iplass.mtp.view.generic.SearchFormView;
 import org.iplass.mtp.view.generic.SearchQueryContext;
 import org.iplass.mtp.view.generic.SearchQueryInterrupter;
@@ -61,7 +64,7 @@ public class CsvDownloadSearchContext extends SearchContextBase {
 
 	private SearchContextBase context;
 
-	private HashMap<String, ReferenceDisplayLabelInfo> referenceDisplayLabelMap = new HashMap<String, ReferenceDisplayLabelInfo>();
+	private HashMap<String, ReferenceDisplayLabelInfo> referenceDisplayLabelMap = new HashMap<>();
 
 	public CsvDownloadSearchContext(SearchContextBase context) {
 		this.context = context;
@@ -189,16 +192,18 @@ public class CsvDownloadSearchContext extends SearchContextBase {
 		return Boolean.valueOf(getRequest().getParam(Constants.CSV_IS_OUTPUT_CODE_VALUE));
 	}
 
+	@Override
 	public SearchConditionSection getConditionSection() {
 		return context.getConditionSection();
 	}
 
+	@Override
 	public PropertyDefinition getPropertyDefinition(String propName) {
 		return context.getPropertyDefinition(propName);
 	}
 
 	public List<String> getColumns() {
-		ArrayList<String> cols = new ArrayList<String>();
+		ArrayList<String> cols = new ArrayList<>();
 		if (outputSpecifyProperties() && !isOutputResult()) {
 			String[] properties = getConditionSection().getCsvdownloadProperties().split(",");
 			for (String property : properties) {
@@ -218,7 +223,7 @@ public class CsvDownloadSearchContext extends SearchContextBase {
 					.filter(e -> e instanceof PropertyColumn).map(e -> (PropertyColumn) e)
 					.collect(Collectors.toList());
 			for (PropertyColumn col : properties) {
-				if (col.isDispFlag()) {
+				if (EntityViewUtil.isDisplayElement(getDefName(), col.getElementRuntimeId(), OutputType.SEARCHRESULT)) {
 					String propName = col.getPropertyName();
 					if (col.getEditor() instanceof ReferencePropertyEditor) {
 						List<NestProperty> nest = ((ReferencePropertyEditor)col.getEditor()).getNestProperties();
@@ -238,6 +243,14 @@ public class CsvDownloadSearchContext extends SearchContextBase {
 		}
 
 		return cols;
+	}
+
+	public MultipleFormat getMultipleFormat() {
+		if (getConditionSection().getCsvMultipleFormat() != null) {
+			return getConditionSection().getCsvMultipleFormat();
+		} else {
+			return MultipleFormat.EACH_COLUMN;
+		}
 	}
 
 	public String getEntityLabel() {

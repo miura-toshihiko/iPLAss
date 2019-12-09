@@ -26,6 +26,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.TimeZone;
 
 import org.iplass.mtp.impl.auth.authenticate.token.sql.AuthTokenSelectSQL;
 import org.iplass.mtp.impl.auth.authenticate.token.sql.AuthTokenUpdateSQL;
@@ -34,6 +35,7 @@ import org.iplass.mtp.impl.rdb.adapter.RdbAdapter;
 import org.iplass.mtp.impl.rdb.adapter.RdbAdapterService;
 import org.iplass.mtp.spi.ServiceRegistry;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonTypeInfo.As;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -46,6 +48,8 @@ public class RdbAuthTokenStore implements AuthTokenStore {
 	private AuthTokenUpdateSQL updateSql;
 	private RdbAdapter rdb;
 	
+	private boolean saveDetailAsJson;
+
 	private ObjectMapper objectMapper;
 
 	public RdbAuthTokenStore() {
@@ -55,6 +59,16 @@ public class RdbAuthTokenStore implements AuthTokenStore {
 		objectMapper = new ObjectMapper();
 		objectMapper.enableDefaultTyping(DefaultTyping.OBJECT_AND_NON_CONCRETE, As.PROPERTY);
 		objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+		//for backward compatibility
+		objectMapper.configOverride(java.sql.Date.class).setFormat(JsonFormat.Value.forPattern("yyyy-MM-dd").withTimeZone(TimeZone.getDefault()));
+	}
+	
+	public boolean isSaveDetailAsJson() {
+		return saveDetailAsJson;
+	}
+
+	public void setSaveDetailAsJson(boolean saveDetailAsJson) {
+		this.saveDetailAsJson = saveDetailAsJson;
 	}
 	
 	@Override
@@ -64,13 +78,13 @@ public class RdbAuthTokenStore implements AuthTokenStore {
 			public Void logic() throws SQLException {
 				PreparedStatement ps = getPreparedStatement(updateSql.createInsertSQL());
 				try {
-					updateSql.setInsertParameter(rdb, ps, token, objectMapper);
+					updateSql.setInsertParameter(rdb, ps, token, saveDetailAsJson, objectMapper);
 				} catch (JsonProcessingException e) {
 					throw new RuntimeException(e);
 				}
 				int cnt = ps.executeUpdate();
 				if (cnt != 1) {
-					throw new RuntimeException("fail to insert RememberMeToken:" + token.getSeries());
+					throw new AuthTokenUpdateException("fail to insert AuthToken:" + token.getSeries());
 				}
 				return null;
 			}
@@ -85,13 +99,13 @@ public class RdbAuthTokenStore implements AuthTokenStore {
 			public Void logic() throws SQLException {
 				PreparedStatement ps = getPreparedStatement(updateSql.createUpdateStrictSQL());
 				try {
-					updateSql.setUpdateStrictParameter(rdb, ps, newToken, currentToken, objectMapper);
+					updateSql.setUpdateStrictParameter(rdb, ps, newToken, currentToken, saveDetailAsJson, objectMapper);
 				} catch (JsonProcessingException e) {
 					throw new RuntimeException(e);
 				}
 				int cnt = ps.executeUpdate();
 				if (cnt != 1) {
-					throw new RuntimeException("fail to update RememberMeToken:" + newToken.getSeries());
+					throw new AuthTokenUpdateException("fail to update AuthToken:" + newToken.getSeries());
 				}
 				return null;
 			}
@@ -136,7 +150,7 @@ public class RdbAuthTokenStore implements AuthTokenStore {
 				selectSql.setSelectParameter(rdb, ps, tenantId, type, series);
 				try (ResultSet rs = ps.executeQuery()) {
 					if (rs.next()) {
-						return selectSql.toAuthToken(rs, objectMapper);
+						return selectSql.toAuthToken(rs, saveDetailAsJson, objectMapper);
 					} else {
 						return null;
 					}
@@ -161,17 +175,17 @@ public class RdbAuthTokenStore implements AuthTokenStore {
 	}
 
 	@Override
-	public List<AuthToken> getByUser(int tenantId, String userUniqueKey) {
+	public List<AuthToken> getByOwner(int tenantId, String type, String userUniqueKey) {
 		SqlExecuter<List<AuthToken>> executer = new SqlExecuter<List<AuthToken>>() {
 			@Override
 			public List<AuthToken> logic() throws SQLException {
 				PreparedStatement ps = getPreparedStatement(selectSql.createSelectByUserUniqueKeySQL());
-				selectSql.setSelectByUserUniqueKeyParameter(rdb, ps, tenantId, userUniqueKey);
+				selectSql.setSelectByUserUniqueKeyParameter(rdb, ps, tenantId, type, userUniqueKey);
 				List<AuthToken> res = new ArrayList<>();
 				
 				try (ResultSet rs = ps.executeQuery()) {
 					while (rs.next()) {
-						res.add(selectSql.toAuthToken(rs, objectMapper));
+						res.add(selectSql.toAuthToken(rs, saveDetailAsJson, objectMapper));
 					}
 				}
 				return res;

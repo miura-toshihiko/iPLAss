@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import org.apache.commons.io.FilenameUtils;
 import org.iplass.adminconsole.server.base.i18n.AdminResourceBundleUtil;
@@ -33,6 +34,7 @@ import org.iplass.adminconsole.server.base.rpc.util.AuthUtil;
 import org.iplass.adminconsole.server.base.service.AdminEntityManager;
 import org.iplass.adminconsole.server.base.service.auditlog.MetaDataAction;
 import org.iplass.adminconsole.server.base.service.auditlog.MetaDataAuditLogger;
+import org.iplass.adminconsole.shared.base.dto.KeyValue;
 import org.iplass.adminconsole.shared.base.dto.i18n.I18nMetaDisplayInfo;
 import org.iplass.adminconsole.shared.metadata.dto.AdminDefinitionModifyResult;
 import org.iplass.adminconsole.shared.metadata.dto.MetaDataInfo;
@@ -57,6 +59,8 @@ import org.iplass.mtp.async.AsyncTaskFuture;
 import org.iplass.mtp.async.AsyncTaskInfo;
 import org.iplass.mtp.async.AsyncTaskInfoSearchCondtion;
 import org.iplass.mtp.async.AsyncTaskManager;
+import org.iplass.mtp.auth.login.Credential;
+import org.iplass.mtp.auth.login.IdPasswordCredential;
 import org.iplass.mtp.definition.Definition;
 import org.iplass.mtp.definition.DefinitionEntry;
 import org.iplass.mtp.definition.DefinitionInfo;
@@ -84,6 +88,11 @@ import org.iplass.mtp.entity.query.SortSpec.SortType;
 import org.iplass.mtp.impl.async.rdb.RdbQueueService;
 import org.iplass.mtp.impl.auth.AuthService;
 import org.iplass.mtp.impl.auth.authenticate.AuthenticationProvider;
+import org.iplass.mtp.impl.auth.oauth.MetaOAuthClient.OAuthClientRuntime;
+import org.iplass.mtp.impl.auth.oauth.MetaOAuthResourceServer.OAuthResourceServerRuntime;
+import org.iplass.mtp.impl.auth.oauth.OAuthClientService;
+import org.iplass.mtp.impl.auth.oauth.OAuthResourceServerService;
+import org.iplass.mtp.impl.core.TenantContext;
 import org.iplass.mtp.impl.core.TenantContextService;
 import org.iplass.mtp.impl.definition.DefinitionManagerImpl;
 import org.iplass.mtp.impl.definition.DefinitionPath;
@@ -100,11 +109,13 @@ import org.iplass.mtp.impl.query.OrderBySyntax;
 import org.iplass.mtp.impl.query.QueryServiceHolder;
 import org.iplass.mtp.impl.report.ReportingEngineService;
 import org.iplass.mtp.impl.report.ReportingType;
+import org.iplass.mtp.impl.web.actionmapping.cache.ContentCacheContext;
 import org.iplass.mtp.spi.ServiceRegistry;
 import org.iplass.mtp.transaction.Transaction;
 import org.iplass.mtp.util.StringUtil;
 import org.iplass.mtp.view.filter.EntityFilter;
 import org.iplass.mtp.view.filter.EntityFilterManager;
+import org.iplass.mtp.view.generic.BulkFormView;
 import org.iplass.mtp.view.generic.DetailFormView;
 import org.iplass.mtp.view.generic.EntityView;
 import org.iplass.mtp.view.generic.EntityViewManager;
@@ -136,7 +147,7 @@ import com.google.gwt.user.server.rpc.XsrfProtectedServiceServlet;
 
 public class MetaDataServiceImpl extends XsrfProtectedServiceServlet implements MetaDataService {
 
-	private static final long serialVersionUID = 8995713076256998489L;
+	private static final long serialVersionUID = 460714524971929078L;
 
 	private static final Logger logger = LoggerFactory.getLogger(MetaDataServiceImpl.class);
 
@@ -163,6 +174,9 @@ public class MetaDataServiceImpl extends XsrfProtectedServiceServlet implements 
 	private DefinitionService ds = ServiceRegistry.getRegistry().getService(DefinitionService.class);
 	private RdbQueueService rqs = ServiceRegistry.getRegistry().getService(RdbQueueService.class);
 	private GemConfigService gcs = ServiceRegistry.getRegistry().getService(GemConfigService.class);
+
+	private OAuthClientService oacs = ServiceRegistry.getRegistry().getService(OAuthClientService.class);
+	private OAuthResourceServerService oars = ServiceRegistry.getRegistry().getService(OAuthResourceServerService.class);
 
 	/* ---------------------------------------
 	 * 共通
@@ -371,6 +385,38 @@ public class MetaDataServiceImpl extends XsrfProtectedServiceServlet implements 
 
 				ServiceRegistry.getRegistry().getService(TenantContextService.class).reloadTenantContext(tenantId, false);
 //				MetaDataContext.getContext().clearAllCache();
+				return null;
+			}
+		});
+	}
+
+	@Override
+	public void clearActionCache(int tenantId, String actionName) {
+		AuthUtil.authCheckAndInvoke(getServletContext(), this.getThreadLocalRequest(), this.getThreadLocalResponse(), tenantId, new AuthUtil.Callable<Void>() {
+
+			@Override
+			public Void call() {
+				auditLogger.logTenant("clear content cache of action", "tenantId:" + tenantId + ", actionName:" + actionName);
+
+				TenantContext tc = ServiceRegistry.getRegistry().getService(TenantContextService.class).getTenantContext(tenantId);
+				ContentCacheContext ac = tc.getResource(ContentCacheContext.class);
+				ac.invalidateByActionName(actionName);
+				return null;
+			}
+		});
+	}
+
+	@Override
+	public void clearTenantActionCache(int tenantId) {
+		AuthUtil.authCheckAndInvoke(getServletContext(), this.getThreadLocalRequest(), this.getThreadLocalResponse(), tenantId, new AuthUtil.Callable<Void>() {
+
+			@Override
+			public Void call() {
+				auditLogger.logTenant("clear content cache of all tenant action", "tenantId:" + tenantId);
+
+				TenantContext tc = ServiceRegistry.getRegistry().getService(TenantContextService.class).getTenantContext(tenantId);
+				ContentCacheContext ac = tc.getResource(ContentCacheContext.class);
+				ac.invalidateAllEntry();
 				return null;
 			}
 		});
@@ -1059,29 +1105,12 @@ public class MetaDataServiceImpl extends XsrfProtectedServiceServlet implements 
 
 			@Override
 			public String call() {
-				EntityDefinition ed = edm.get(name);
-				return getProperty(ed, propertyName);
-			}
-
-			private String getProperty(EntityDefinition ed, String propName) {
-				int firstDotIndex = propName.indexOf('.');
-				if (firstDotIndex > 0) {
-					String topPropName = propName.substring(0, firstDotIndex);
-					String subPropName = propName.substring(firstDotIndex + 1);
-					PropertyDefinition topProperty = ed.getProperty(topPropName);
-					if (topProperty instanceof ReferenceProperty) {
-						EntityDefinition red = edm.get(((ReferenceProperty) topProperty).getObjectDefinitionName());
-						if (red != null) {
-							return topProperty.getDisplayName() + "." + getProperty(red, subPropName);
-						}
-					}
-				} else {
-					PropertyDefinition pd = ed.getProperty(propName);
-					if (pd != null) return pd.getDisplayName();
+				PropertyDefinition pd = getPropertyDefinition(tenantId, name, propertyName);
+				if (pd != null) {
+					return pd.getDisplayName();
 				}
 				return null;
 			}
-
 		});
 	}
 
@@ -1096,22 +1125,27 @@ public class MetaDataServiceImpl extends XsrfProtectedServiceServlet implements 
 	}
 
 	@Override
-	public Long getAutoNumberCurrentValue(int tenantId, final String name, final String propertyName) {
-		return AuthUtil.authCheckAndInvoke(getServletContext(), this.getThreadLocalRequest(), this.getThreadLocalResponse(), tenantId, new AuthUtil.Callable<Long>() {
+	public List<KeyValue<String, Long>> getAutoNumberCurrentValueList(int tenantId, final String name, final String propertyName) {
+		return AuthUtil.authCheckAndInvoke(getServletContext(), this.getThreadLocalRequest(), this.getThreadLocalResponse(), tenantId, new AuthUtil.Callable<List<KeyValue<String, Long>>>() {
 			@Override
-			public Long call() {
-				return edm.getAutoNumberCurrentValue(name, propertyName);
+			public List<KeyValue<String, Long>> call() {
+				return edm.getAutoNumberCurrentValueList(name, propertyName).stream().map(value -> {
+					return new KeyValue<String, Long>(value.getKey(), value.getValue());
+				}).collect(Collectors.toList());
 			}
 		});
 	}
 
 	@Override
-	public void resetAutoNumberCounter(int tenantId, final String name, final String propertyName, final long startsWith) {
+	public void resetAutoNumberCounterList(int tenantId, final String name, final String propertyName, final List<KeyValue<String, Long>> values) {
 		AuthUtil.authCheckAndInvoke(getServletContext(), this.getThreadLocalRequest(), this.getThreadLocalResponse(), tenantId, new AuthUtil.Callable<Void>() {
 			@Override
 			public Void call() {
-				auditLogger.logMetadata(MetaDataAction.UPDATE, EntityDefinition.class.getName(), "name:" + name + " propertyName:" + propertyName + " autoNumber:" + startsWith);
-				edm.resetAutoNumberCounter(name, propertyName, startsWith);
+				values.forEach(value -> {
+					auditLogger.logMetadata(MetaDataAction.UPDATE, EntityDefinition.class.getName(), "name:" + name + " propertyName:" + propertyName + " subKey:" + value.getKey() + " autoNumber:" + value.getValue());
+					//開始値を指定するため、+1する
+					edm.resetAutoNumberCounter(name, propertyName, value.getKey(), value.getValue() + 1);
+				});
 				return null;
 			}
 		});
@@ -1228,6 +1262,18 @@ public class MetaDataServiceImpl extends XsrfProtectedServiceServlet implements 
 			}
 		});
 	}
+
+	@Override
+	public BulkFormView createDefaultBulkFormView(int tenantId, final String name) {
+		return AuthUtil.authCheckAndInvoke(getServletContext(), this.getThreadLocalRequest(), this.getThreadLocalResponse(), tenantId, new AuthUtil.Callable<BulkFormView>() {
+			@Override
+			public BulkFormView call() {
+				auditLogger.logMetadata(MetaDataAction.CREATE, BulkFormView.class.getName(), "name:" + name);
+				return evm.createDefaultBulkFormView(name);
+			}
+		});
+	}
+
 
 	@Override
 	public List<Entity> getRoles(int tenantId) {
@@ -1868,6 +1914,76 @@ public class MetaDataServiceImpl extends XsrfProtectedServiceServlet implements 
 
 	private static String resourceString(String suffix, Object... arguments) {
 		return AdminResourceBundleUtil.resourceString("MetaDataServiceImpl." + suffix, arguments);
+	}
+
+	/* ---------------------------------------
+	 * OAuth
+	 --------------------------------------- */
+
+	@Override
+	public String generateCredentialOAuthClient(final int tenantId, final String definitionName) {
+		return AuthUtil.authCheckAndInvoke(getServletContext(), this.getThreadLocalRequest(), this.getThreadLocalResponse(), tenantId, new AuthUtil.Callable<String>() {
+
+			@Override
+			public String call() {
+				OAuthClientRuntime runtime = oacs.getRuntimeByName(definitionName);
+				if (runtime != null) {
+					Credential credential = runtime.generateCredential();
+					if (credential != null && credential instanceof IdPasswordCredential) {
+						return ((IdPasswordCredential)credential).getPassword();
+					}
+				}
+				return null;
+			}
+		});
+	}
+
+	@Override
+	public void deleteOldCredentialOAuthClient(final int tenantId, final String definitionName) {
+		AuthUtil.authCheckAndInvoke(getServletContext(), this.getThreadLocalRequest(), this.getThreadLocalResponse(), tenantId, new AuthUtil.Callable<Void>() {
+
+			@Override
+			public Void call() {
+				OAuthClientRuntime runtime = oacs.getRuntimeByName(definitionName);
+				if (runtime != null) {
+					runtime.deleteOldCredential();
+				}
+				return null;
+			}
+		});
+	}
+
+	@Override
+	public String generateCredentialOAuthResourceServer(final int tenantId, final String definitionName) {
+		return AuthUtil.authCheckAndInvoke(getServletContext(), this.getThreadLocalRequest(), this.getThreadLocalResponse(), tenantId, new AuthUtil.Callable<String>() {
+
+			@Override
+			public String call() {
+				OAuthResourceServerRuntime runtime = oars.getRuntimeByName(definitionName);
+				if (runtime != null) {
+					Credential credential = runtime.generateCredential();
+					if (credential != null && credential instanceof IdPasswordCredential) {
+						return ((IdPasswordCredential)credential).getPassword();
+					}
+				}
+				return null;
+			}
+		});
+	}
+
+	@Override
+	public void deleteOldCredentialOAuthResourceServer(final int tenantId, final String definitionName) {
+		AuthUtil.authCheckAndInvoke(getServletContext(), this.getThreadLocalRequest(), this.getThreadLocalResponse(), tenantId, new AuthUtil.Callable<Void>() {
+
+			@Override
+			public Void call() {
+				OAuthResourceServerRuntime runtime = oars.getRuntimeByName(definitionName);
+				if (runtime != null) {
+					runtime.deleteOldCredential();
+				}
+				return null;
+			}
+		});
 	}
 
 }

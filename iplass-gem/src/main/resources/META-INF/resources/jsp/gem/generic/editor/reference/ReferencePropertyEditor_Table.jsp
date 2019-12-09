@@ -259,7 +259,7 @@
 	} else {
 		updateRefAction = contextPath + "/" + UpdateReferencePropertyCommand.ACTION_NAME;
 	}
-	String viewName = request.getParameter(Constants.VIEW_NAME);
+	String viewName = (String)request.getAttribute(Constants.VIEW_NAME);
 	if (viewName == null) viewName = "";
 	if (StringUtil.isNotBlank(viewName)) {
 		updateRefAction = updateRefAction + "/" + viewName;
@@ -295,7 +295,7 @@
 	//定義名を参照型のものに置き換える、後でdefNameに戻す
 	request.setAttribute(Constants.DEF_NAME, refDefName);
 
-	if (OutputType.EDIT == execOutputType) {
+	if (OutputType.EDIT == execOutputType || OutputType.BULK == execOutputType) {
 
 		//-------------------------
 		//Editモード
@@ -308,13 +308,21 @@
 			String _rootDefName = StringUtil.escapeJavaScript(rootDefName);
 			String _propName = StringUtil.escapeJavaScript(propName);
 			String _viewName = StringUtil.escapeJavaScript(viewName);
+			String addBtnStyle = "";
+			if (entities.size() == pd.getMultiplicity()) addBtnStyle = "display: none;"; 
 %>
 <p class="mb10">
-<input type="button" value="${m:rs('mtp-gem-messages', 'generic.editor.reference.ReferencePropertyEditor_Table.add')}" id="id_<c:out value="<%=propName%>"/>_addButton_top" class="gr-btn-02 add-btn table-top-button" />
+<input type="button" value="${m:rs('mtp-gem-messages', 'generic.editor.reference.ReferencePropertyEditor_Table.add')}" id="id_<c:out value="<%=propName%>"/>_addButton_top" class="gr-btn-02 add-btn table-top-button" style="<c:out value="<%=addBtnStyle%>" />" />
 <script type="text/javascript">
+var toggleAddBtn_<%=_propName%> = function() {
+	var $tbody = $("#<%=StringUtil.escapeJavaScript(dummyRowId)%>").parent();
+	var display = $tbody.children("tr:not(:hidden)").length < <%=pd.getMultiplicity()%>;
+	$("#id_<c:out value="<%=propName%>"/>_addButton_top").toggle(display);
+}
 $(function() {
 	$("#id_<%=StringUtil.escapeJavaScript(propName)%>_addButton_top").on("click", function() {
 		addNestRow("<%=StringUtil.escapeJavaScript(dummyRowId)%>", "<%=StringUtil.escapeJavaScript(countId)%>", <%=pd.getMultiplicity() + 1%>, true, "<%=_rootDefName%>", "<%=_viewName%>", "<%=_propName%>", function(row, index) {
+			toggleAddBtn_<%=_propName%>();
 <%
 			if (StringUtil.isNotBlank(editor.getAddRowCallbackScript())) {
 %>
@@ -322,7 +330,7 @@ $(function() {
 <%
 			}
 %>
-		});
+		}, toggleAddBtn_<%=_propName%>);
 	});
 });
 </script>
@@ -713,7 +721,7 @@ ${m:rs("mtp-gem-messages", "generic.editor.reference.ReferencePropertyEditor_Tab
 				String _detailAction = StringUtil.escapeJavaScript(detailAction);
 				String _viewAction = StringUtil.escapeJavaScript(viewAction);
 				String _refDefName = StringUtil.escapeJavaScript(refDefName);
-				String _entityOid = StringUtil.escapeJavaScript(entity.getOid());
+				String _entityOid = entity.getOid() == null ? "" : StringUtil.escapeJavaScript(entity.getOid());
 				String _trId = StringUtil.escapeJavaScript(trId);
 				String _idxPropName = StringUtil.escapeJavaScript(idxPropName);
 				String _reloadUrl = StringUtil.escapeJavaScript(reloadUrl);
@@ -753,7 +761,7 @@ ${m:rs("mtp-gem-messages", "generic.editor.reference.ReferencePropertyEditor_Tab
 %>
 <td nowrap="nowrap">
 <input type="button" value="${m:rs('mtp-gem-messages', 'generic.editor.reference.ReferencePropertyEditor_Table.delete')}" class="gr-btn-02 del-btn"
-		onclick="deleteRefTableRow('<%=StringUtil.escapeJavaScript(trId)%>')" />
+		onclick="deleteRefTableRow('<%=StringUtil.escapeJavaScript(trId)%>', toggleAddBtn_<%=StringUtil.escapeJavaScript(propName)%>)" />
 </td>
 <%
 			}
@@ -774,13 +782,22 @@ ${m:rs("mtp-gem-messages", "generic.editor.reference.ReferencePropertyEditor_Tab
 			String _rootDefName = StringUtil.escapeJavaScript(rootDefName);
 			String _propName = StringUtil.escapeJavaScript(propName);
 			String _viewName = StringUtil.escapeJavaScript(viewName);
+			String addBtnStyle = "";
+			if (entities.size() == pd.getMultiplicity()) addBtnStyle = "display: none;"; 
 %>
 <p class="mt10">
-<input type="button" value="${m:rs('mtp-gem-messages', 'generic.editor.reference.ReferencePropertyEditor_Table.add')}" id="id_<c:out value="<%=propName%>"/>_addButton_bottom" class="gr-btn-02 add-btn table-bottom-button" />
+<input type="button" value="${m:rs('mtp-gem-messages', 'generic.editor.reference.ReferencePropertyEditor_Table.add')}" id="id_<c:out value="<%=propName%>"/>_addButton_bottom" class="gr-btn-02 add-btn table-bottom-button" style="<c:out value="<%=addBtnStyle%>" />" />
 <script type="text/javascript">
+var toggleAddBtn_<%=_propName%> = function() {
+	var $tbody = $("#<%=StringUtil.escapeJavaScript(dummyRowId)%>").parent();
+	<%-- 参照プロパティで多重度が*指定（値的には-1）可能 --%>
+	var display = <%=pd.getMultiplicity() == -1%> || $tbody.children("tr:not(:hidden)").length < <%=pd.getMultiplicity()%>;
+	$("#id_<c:out value="<%=propName%>"/>_addButton_bottom").toggle(display);
+}
 $(function() {
 	$("#id_<%=StringUtil.escapeJavaScript(propName)%>_addButton_bottom").on("click", function() {
 		addNestRow("<%=StringUtil.escapeJavaScript(dummyRowId)%>", "<%=StringUtil.escapeJavaScript(countId)%>", <%=pd.getMultiplicity() + 1%>, false, "<%=_rootDefName%>", "<%=_viewName%>", "<%=_propName%>", function(row, index) {
+			toggleAddBtn_<%=_propName%>();
 <%
 			if (StringUtil.isNotBlank(editor.getAddRowCallbackScript())) {
 %>
@@ -788,7 +805,7 @@ $(function() {
 <%
 			}
 %>
-		});
+		}, toggleAddBtn_<%=_propName%>);
 	});
 });
 </script>
@@ -875,7 +892,6 @@ ${m:rs("mtp-gem-messages", "generic.editor.reference.ReferencePropertyEditor_Tab
 		for (int i = 0; i < entities.size(); i++) {
 			final Entity tmp = entities.get(i);
 			String trId = "id_tr_" + propName + i;
-//			Entity entity = em.load(tmp.getOid(), tmp.getVersion(), tmp.getDefinitionName());
 			Entity entity = null;
 			final LoadOption loadOption = getOption(refEd, editor, mappedBy, outputType);
 			LoadEntityContext leContext = handler.beforeLoadReference(tmp.getDefinitionName(), loadOption, pd, LoadType.VIEW);
@@ -958,7 +974,7 @@ ${m:rs("mtp-gem-messages", "generic.editor.reference.ReferencePropertyEditor_Tab
 				}
 				String _viewAction = StringUtil.escapeJavaScript(viewAction);
 				String _refDefName = StringUtil.escapeJavaScript(refDefName);
-				String _entityOid = StringUtil.escapeJavaScript(entity.getOid());
+				String _entityOid = entity.getOid() == null ? "" : StringUtil.escapeJavaScript(entity.getOid());
 				String _reloadUrl = StringUtil.escapeJavaScript(reloadUrl);
 %>
 <td nowrap="nowrap" class="colLink center">

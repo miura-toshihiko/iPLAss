@@ -1,19 +1,19 @@
 /*
  * Copyright (C) 2011 INFORMATION SERVICES INTERNATIONAL - DENTSU, LTD. All Rights Reserved.
- * 
+ *
  * Unless you have purchased a commercial license,
  * the following license terms apply:
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
  * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
@@ -41,7 +41,7 @@ public class ReferenceComboSetting implements Refrectable {
 			displayName="プロパティ名",
 			displayNameKey="generic_editor_ReferenceComboSetting_propertyNameDisplaNameKey",
 			inputType=InputType.PROPERTY,
-			useReferenceType=true,
+			childEntityName=true,
 			description="被参照のプロパティを指定します。",
 			descriptionKey="generic_editor_ReferenceComboSetting_propertyNameDescriptionKey"
 	)
@@ -82,7 +82,8 @@ public class ReferenceComboSetting implements Refrectable {
 			displayNameKey="generic_editor_ReferencePropertyEditor_sortItemDisplaNameKey",
 			inputType=InputType.PROPERTY,
 			description="参照データをソートする項目を指定します。",
-			descriptionKey="generic_editor_ReferencePropertyEditor_sortItemDescriptionKey"
+			descriptionKey="generic_editor_ReferencePropertyEditor_sortItemDescriptionKey",
+			sourceEntityNameField="propertyName"
 	)
 	@EntityViewField(
 			referenceTypes={FieldReferenceType.SEARCHCONDITION, FieldReferenceType.DETAIL}
@@ -102,6 +103,19 @@ public class ReferenceComboSetting implements Refrectable {
 			referenceTypes={FieldReferenceType.SEARCHCONDITION, FieldReferenceType.DETAIL}
 	)
 	private RefSortType sortType;
+
+	@MetaFieldInfo(displayName="表示ラベルとして扱うプロパティ",
+			displayNameKey="generic_editor_ReferencePropertyEditor_displayLabelItemDisplaNameKey",
+			inputType=InputType.PROPERTY,
+			description="<b>表示タイプ:Link、Select</b><br>" +
+					"表示ラベルとして扱うプロパティを指定します。",
+			descriptionKey="generic_editor_ReferencePropertyEditor_displayLabelItemDescriptionKey",
+			sourceEntityNameField="propertyName"
+	)
+	@EntityViewField(
+			referenceTypes = {FieldReferenceType.ALL}
+	)
+	private String displayLabelItem;
 
 	/**
 	 * プロパティ名を取得します。
@@ -181,5 +195,21 @@ public class ReferenceComboSetting implements Refrectable {
 	 */
 	public void setSortType(RefSortType sortType) {
 		this.sortType = sortType;
+	}
+
+	/**
+	 * 表示ラベルとして扱うプロパティを取得します。
+	 * @return 表示ラベルとして扱うプロパティ
+	 */
+	public String getDisplayLabelItem() {
+		return displayLabelItem;
+	}
+
+	/**
+	 * 表示ラベルとして扱うプロパティを設定します。
+	 * @param displayLabelItem 表示ラベルとして扱うプロパティ
+	 */
+	public void setDisplayLabelItem(String displayLabelItem) {
+		this.displayLabelItem = displayLabelItem;
 	}
 }

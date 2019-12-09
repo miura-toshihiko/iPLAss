@@ -135,6 +135,7 @@ $(function(){
 	$(".recursiveTreeTrigger").refRecursiveTree();
 	$(".refLinkSelect").refLinkSelect();
 	$(".refLinkRadio").refLinkRadio();
+	$(".refUnique").refUnique();
 
 	if (typeof CKEDITOR !== "undefined") {
 		CKEDITOR.on("instanceReady", function(ev) {
@@ -154,6 +155,9 @@ $(function(){
 			$(".fixHeight").fixHeight();
 		});
 	}
+
+	//編集画面のラジオボタンの選択解除
+	$("input.radio-togglable").togglableRadio();
 
 	//ゴミ箱
 	$(".allInput").allInputCheck();

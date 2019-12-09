@@ -1,19 +1,19 @@
 /*
  * Copyright (C) 2016 INFORMATION SERVICES INTERNATIONAL - DENTSU, LTD. All Rights Reserved.
- * 
+ *
  * Unless you have purchased a commercial license,
  * the following license terms apply:
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
  * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
@@ -33,9 +33,9 @@ import java.awt.event.WindowEvent;
 import java.lang.reflect.Field;
 import java.util.Properties;
 
+import javax.sql.DataSource;
 import javax.swing.Box;
 import javax.swing.JButton;
-import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
@@ -46,16 +46,12 @@ import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.border.EmptyBorder;
 
-import org.iplass.mtp.ApplicationException;
-import org.iplass.mtp.impl.core.config.ServiceRegistryInitializer;
+import org.iplass.mtp.impl.core.config.BootstrapProps;
 import org.iplass.mtp.impl.rdb.adapter.RdbAdapter;
 import org.iplass.mtp.impl.rdb.adapter.RdbAdapterService;
 import org.iplass.mtp.impl.rdb.connection.ConnectionFactory;
+import org.iplass.mtp.impl.rdb.connection.DataSourceConnectionFactory;
 import org.iplass.mtp.impl.rdb.connection.DriverManagerConnectionFactory;
-import org.iplass.mtp.impl.rdb.mysql.MysqlRdbAdaptor;
-import org.iplass.mtp.impl.rdb.oracle.OracleRdbAdapter;
-import org.iplass.mtp.impl.rdb.postgresql.PostgreSQLRdbAdapter;
-import org.iplass.mtp.impl.rdb.sqlserver.SqlServerRdbAdapter;
 import org.iplass.mtp.spi.ServiceRegistry;
 
 public class DBConfigMenu extends JMenu {
@@ -84,22 +80,17 @@ public class DBConfigMenu extends JMenu {
 		private static final long serialVersionUID = 8378724754491492214L;
 
 		private JTextField txtConfigFileName;
-		private JComboBox<String> cbxRdbAdapter;
-		private JTextField txtConenctUrl;
-		private JTextField txtConenctUser;
-//		private JPasswordField txtConenctUserPass;
-//		private JTextField txtConenctDriver;
-		private JComboBox<String> cbxConenctDriver;
-
-		private ConfigSetting initConfig;
-
-		private RdbAdapterService adapterService;
-		private DriverManagerConnectionFactory dmFactory;
+		private JTextField txtRdbAdapter;
+		private JTextField txtConnectionFactory;
+		private JTextField txtConnectionUrl;
+		private JTextField txtConnectionUser;
+		private JTextField txtConnectionDriver;
+		private JTextField txtDataSourceClass;
 
 		public ConfigSettingDialog(Frame owner) {
 			super(owner);
 			setTitle("Config Settings");
-			setBounds(64, 64, 300, 530);
+			setBounds(64, 64, 300, 590);
 
 			setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
 			setLocationRelativeTo(null);//中央表示
@@ -136,44 +127,48 @@ public class DBConfigMenu extends JMenu {
 			gridbag.setConstraints(dummy, constraints);
 			headerPane.add(dummy);
 
+			int row = 0;
 			JLabel lblConfigFileName = new JLabel("Service Config File");
 			txtConfigFileName = new JTextField();
 			txtConfigFileName.setPreferredSize(new Dimension(300, 25));
 			txtConfigFileName.setEditable(false);
-			createLableText(lblConfigFileName, txtConfigFileName, null, 0, gridbag, constraints, headerPane);
+			createLableText(lblConfigFileName, txtConfigFileName, null, ++row, gridbag, constraints, headerPane);
 
 			JLabel lblRdbAdapter = new JLabel("Rdb Adapter");
-			cbxRdbAdapter = new JComboBox<String>(new String[]{"OracleRdbAdapter", "MysqlRdbAdaptor", "SqlServerRdbAdapter"});
-			cbxRdbAdapter.setPreferredSize(new Dimension(300, 25));
-			cbxRdbAdapter.setEnabled(false); //各Serviceなどのインスタンス変数に保持してしまっているのであきらめ
-			createLableText(lblRdbAdapter, cbxRdbAdapter, null, 1, gridbag, constraints, headerPane);
+			txtRdbAdapter = new JTextField();
+			txtRdbAdapter.setPreferredSize(new Dimension(300, 25));
+			txtRdbAdapter.setEditable(false);
+			createLableText(lblRdbAdapter, txtRdbAdapter, null, ++row, gridbag, constraints, headerPane);
 
-			JLabel lblConenctUrl = new JLabel("Conenct Url");
-			txtConenctUrl = new JTextField();
-			txtConenctUrl.setPreferredSize(new Dimension(300, 25));
-			txtConenctUrl.setEditable(false);
-			createLableText(lblConenctUrl, txtConenctUrl, null, 2, gridbag, constraints, headerPane);
+			JLabel lblConnectionFactory = new JLabel("Connection Factory");
+			txtConnectionFactory = new JTextField();
+			txtConnectionFactory.setPreferredSize(new Dimension(300, 25));
+			txtConnectionFactory.setEditable(false);
+			createLableText(lblConnectionFactory, txtConnectionFactory, null, ++row, gridbag, constraints, headerPane);
 
-			JLabel lblConenctUser = new JLabel("Conenct User");
-			txtConenctUser = new JTextField();
-			txtConenctUser.setPreferredSize(new Dimension(300, 25));
-			txtConenctUser.setEditable(false);
-			createLableText(lblConenctUser, txtConenctUser, null, 3, gridbag, constraints, headerPane);
+			JLabel lblConnectionUrl = new JLabel("Connection Url");
+			txtConnectionUrl = new JTextField();
+			txtConnectionUrl.setPreferredSize(new Dimension(300, 25));
+			txtConnectionUrl.setEditable(false);
+			createLableText(lblConnectionUrl, txtConnectionUrl, null, ++row, gridbag, constraints, headerPane);
 
-//			JLabel lblConenctUserPass = new JLabel("Conenct User Password");
-//			txtConenctUserPass = new JPasswordField();
-//			txtConenctUserPass.setPreferredSize(new Dimension(300, 25));
-//			txtConenctUserPass.setEditable(false);
-//			createLableText(lblConenctUserPass, txtConenctUserPass, null, 4, gridbag, constraints, headerPane);
+			JLabel lblConnectionUser = new JLabel("Connection User");
+			txtConnectionUser = new JTextField();
+			txtConnectionUser.setPreferredSize(new Dimension(300, 25));
+			txtConnectionUser.setEditable(false);
+			createLableText(lblConnectionUser, txtConnectionUser, null, ++row, gridbag, constraints, headerPane);
 
-			JLabel lblConenctDriver = new JLabel("Conenct Driver");
-//			txtConenctDriver = new JTextField();
-//			txtConenctDriver.setPreferredSize(new Dimension(300, 25));
-//			createLableText(lblConenctDriver, txtConenctDriver, null, 5, gridbag, constraints, headerPane);
-			cbxConenctDriver = new JComboBox<String>(new String[]{"oracle.jdbc.driver.OracleDriver", "com.mysql.jdbc.Driver", "com.microsoft.sqlserver.jdbc.SQLServerDriver"});
-			cbxConenctDriver.setPreferredSize(new Dimension(300, 25));
-			cbxConenctDriver.setEnabled(false);	//RdbAdapterが変更できないのでこれも
-			createLableText(lblConenctDriver, cbxConenctDriver, null, 5, gridbag, constraints, headerPane);
+			JLabel lblConnectionDriver = new JLabel("Connection Driver");
+			txtConnectionDriver = new JTextField();
+			txtConnectionDriver.setPreferredSize(new Dimension(300, 25));
+			txtConnectionDriver.setEditable(false);	//RdbAdapterが変更できないのでこれも
+			createLableText(lblConnectionDriver, txtConnectionDriver, null, ++row, gridbag, constraints, headerPane);
+
+			JLabel lblDataSourceClass = new JLabel("DataSource Class");
+			txtDataSourceClass = new JTextField();
+			txtDataSourceClass.setPreferredSize(new Dimension(300, 25));
+			txtDataSourceClass.setEditable(false);	//RdbAdapterが変更できないのでこれも
+			createLableText(lblDataSourceClass, txtDataSourceClass, null, ++row, gridbag, constraints, headerPane);
 
 			JPanel mainPane = new JPanel();
 			mainPane.setBorder(new EmptyBorder(5, 5, 5, 5));
@@ -254,40 +249,37 @@ public class DBConfigMenu extends JMenu {
 
 		private void searchConfig() throws Exception {
 
-			initConfig = new ConfigSetting();
+			ConfigSetting initConfig = new ConfigSetting();
 
 			//Config FileName
-			initConfig.configFileName = ServiceRegistryInitializer.getConfigFileName();
+			initConfig.configFileName = BootstrapProps.getInstance().getProperty(BootstrapProps.CONFIG_FILE_NAME, BootstrapProps.DEFAULT_CONFIG_FILE_NAME);
 			txtConfigFileName.setText(initConfig.configFileName);
 
 			//Rdb Adapter
-			RdbAdapter adapter = getRdbAdapter();
-			initConfig.rdbAdapterName = getRdbAdapterCbxValue(adapter);
+			RdbAdapter adapter = ServiceRegistry.getRegistry().getService(RdbAdapterService.class).getRdbAdapter();
+			initConfig.rdbAdapterName = adapter.getClass().getSimpleName();
 
 			//Connection Factory
 			ConnectionFactory factory = ServiceRegistry.getRegistry().getService(ConnectionFactory.class);
+			initConfig.connectionFactory = factory.getClass().getSimpleName();
 			if (factory instanceof DriverManagerConnectionFactory) {
-				dmFactory = (DriverManagerConnectionFactory) factory;
-				initConfig.conenctUrl = getUrl();
+				DriverManagerConnectionFactory dmFactory = (DriverManagerConnectionFactory) factory;
+				initConfig.connectionUrl = getDriverUrl(dmFactory);
 
-				Properties properties = getInfo();
+				Properties properties = getDriverInfo(dmFactory);
 				if (properties.keySet().contains("user")) {
-					initConfig.conenctUser = properties.getProperty("user");
+					initConfig.connectionUser = properties.getProperty("user");
 				} else {
-					initConfig.conenctUser = "not found";
+					initConfig.connectionUser = "not found";
 				}
-//				if (properties.keySet().contains("password")) {
-//					initConfig.conenctUserPass = properties.getProperty("password");
-//				} else {
-//					initConfig.conenctUserPass = "not found";
-//				}
 				if (properties.keySet().contains("driver")) {
-					initConfig.conenctDriver = properties.getProperty("driver");
+					initConfig.connectionDriver = properties.getProperty("driver");
 				} else {
-					initConfig.conenctDriver = "not found";
+					initConfig.connectionDriver = "not found";
 				}
-			} else {
-				throw new ApplicationException("unsupport ConnectionFactory class : " + factory.getClass().getName());
+			} else if (factory instanceof DataSourceConnectionFactory) {
+				DataSourceConnectionFactory dsFactory = (DataSourceConnectionFactory) factory;
+				initConfig.dataSourceClass = getDataSourceClass(dsFactory);
 			}
 
 			setConfigSetting(initConfig);
@@ -296,43 +288,24 @@ public class DBConfigMenu extends JMenu {
 		private void setConfigSetting(ConfigSetting config) {
 
 			//Rdb Adapter
-			cbxRdbAdapter.setSelectedItem(initConfig.rdbAdapterName);
+			txtRdbAdapter.setText(config.rdbAdapterName);
 
 			//Connection Factory
-			txtConenctUrl.setText(initConfig.conenctUrl);
-			txtConenctUser.setText(initConfig.conenctUser);
-//			txtConenctUserPass.setText(initConfig.conenctUserPass);
-			cbxConenctDriver.setSelectedItem(initConfig.conenctDriver);
+			txtConnectionFactory.setText(config.connectionFactory);
+			txtConnectionUrl.setText(config.connectionUrl);
+			txtConnectionUser.setText(config.connectionUser);
+			txtConnectionDriver.setText(config.connectionDriver);
+			txtDataSourceClass.setText(config.dataSourceClass);
 		}
 
-		private RdbAdapter getRdbAdapter() {
-
-			adapterService = ServiceRegistry.getRegistry().getService(RdbAdapterService.class);
-			return adapterService.getRdbAdapter();
-		}
-
-		private String getRdbAdapterCbxValue(RdbAdapter adapter) {
-			if (adapter instanceof OracleRdbAdapter) {
-				return "OracleRdbAdapter";
-			} else if (adapter instanceof MysqlRdbAdaptor) {
-				return "MysqlRdbAdaptor";
-			} else if (adapter instanceof PostgreSQLRdbAdapter) {
-				return "PostgreSQLRdbAdaptor";
-			} else if (adapter instanceof SqlServerRdbAdapter) {
-				return "SqlServerRdbAdapter";
-			} else {
-				throw new ApplicationException("unsupport RdbAdapter class : " + adapter.getClass().getName());
-			}
-		}
-
-		private String getUrl() throws Exception {
+		private String getDriverUrl(DriverManagerConnectionFactory dmFactory) throws Exception {
 			//private フィールドなのでリフレクションでセット
 			Field urlField = dmFactory.getClass().getDeclaredField("url");
 			urlField.setAccessible(true);
 			return (String)urlField.get(dmFactory);
 		}
 
-		private Properties getInfo() throws Exception {
+		private Properties getDriverInfo(DriverManagerConnectionFactory dmFactory) throws Exception {
 			//private フィールドなのでリフレクションでセット
 			Field infoField = dmFactory.getClass().getDeclaredField("info");
 			infoField.setAccessible(true);
@@ -340,13 +313,21 @@ public class DBConfigMenu extends JMenu {
 
 		}
 
+		private String getDataSourceClass(DataSourceConnectionFactory dsFactory) throws Exception {
+			//private フィールドなのでリフレクションでセット
+			Field dataSourceField = dsFactory.getClass().getDeclaredField("dataSource");
+			dataSourceField.setAccessible(true);
+			return ((DataSource)dataSourceField.get(dsFactory)).getClass().getName();
+		}
+
 		private static class ConfigSetting {
 			String configFileName;
 			String rdbAdapterName;
-			String conenctUrl;
-			String conenctUser;
-			//String conenctUserPass;
-			String conenctDriver;
+			String connectionFactory;
+			String connectionUrl;
+			String connectionUser;
+			String connectionDriver;
+			String dataSourceClass;
 		}
 
 	}

@@ -28,6 +28,8 @@ import java.util.Map;
 import javax.xml.bind.annotation.XmlAttribute;
 import javax.xml.bind.annotation.XmlElement;
 
+import org.iplass.mtp.spi.ObjectBuilder;
+import org.iplass.mtp.spi.ServiceConfigrationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,6 +52,11 @@ public class NameValue {
 	private boolean isIfnone;
 	
 	private boolean isNull;
+	
+	private String ref;
+	
+	private String builder;
+	private String buildScript;
 	
 	public NameValue() {
 	}
@@ -163,7 +170,32 @@ public class NameValue {
 		this.textValue = textValue;
 	}
 	
+	@XmlAttribute
+	public String getRef() {
+		return ref;
+	}
+
+	public void setRef(String ref) {
+		this.ref = ref;
+	}
 	
+	@XmlAttribute
+	public String getBuilder() {
+		return builder;
+	}
+
+	public void setBuilder(String builder) {
+		this.builder = builder;
+	}
+
+	public String getBuildScript() {
+		return buildScript;
+	}
+
+	public void setBuildScript(String buildScript) {
+		this.buildScript = buildScript;
+	}
+
 	public String value() {
 		if (value != null && value.length() != 0) {
 			return value;
@@ -174,37 +206,86 @@ public class NameValue {
 	public NameValue merge(NameValue superNameValue) {
 		NameValue merged = new NameValue();
 		merged.name = name;
-		if (className != null) {
-			merged.className = className;
-		} else {
-			merged.className = superNameValue.className;
-		}
 		merged.isAdditional = isAdditional;
 		merged.isFinal = isFinal;
 		merged.isEncrypted = isEncrypted;
 		merged.isIfnone = isIfnone;
-		if (textValue != null) {
-			merged.textValue = textValue;
-		} else {
-			merged.textValue = superNameValue.textValue;
-		}
-		if (value != null) {
-			merged.value = value;
-		} else {
-			merged.value = superNameValue.value;
-		}
 		
-		merged.property = mergeNameValueArray(name, property, superNameValue.property);
-
-		if (arg != null) {
-			merged.arg = arg;
+		if (ref != null) {
+			//ref定義を優先
+			merged.ref = ref;
 		} else {
-			merged.arg = superNameValue.arg;
+			merged.ref = superNameValue.ref;
+			
+			if (className != null) {
+				merged.className = className;
+			} else {
+				merged.className = superNameValue.className;
+			}
+			
+			if (textValue != null) {
+				merged.textValue = textValue;
+			} else {
+				merged.textValue = superNameValue.textValue;
+			}
+			if (value != null) {
+				merged.value = value;
+			} else {
+				merged.value = superNameValue.value;
+			}
+			
+			merged.property = mergeNameValueArray(name, property, superNameValue.property);
+
+			if (arg != null) {
+				merged.arg = arg;
+			} else {
+				merged.arg = superNameValue.arg;
+			}
+			
+			if (builder != null) {
+				merged.builder = builder;
+			} else {
+				merged.builder = superNameValue.builder;
+			}
+			
+			if (buildScript != null) {
+				merged.buildScript = buildScript;
+			} else {
+				merged.buildScript = superNameValue.buildScript;
+			}
 		}
 		
 		return merged;
 	}
 	
+	public ObjectBuilder<?> builder() {
+		if (builder != null && buildScript != null) {
+			throw new ServiceConfigrationException("specify either builder or buildScript on property/bean element. name:" + name + ", builder:" + builder + ", buildScript:" + concat(buildScript));
+		}
+		if (builder != null) {
+			try {
+				return (ObjectBuilder<?>) Class.forName(builder).newInstance();
+			} catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {
+				throw new ServiceConfigrationException(e);
+			}
+		}
+		if (buildScript != null) {
+			return new GroovyScriptObjectBuilder<>(buildScript);
+		}
+		
+		return null;
+	}
+	
+	private String concat(String str) {
+		if (str == null) {
+			return null;
+		}
+		if (str.length() < 256) {
+			return str;
+		} else {
+			return str.substring(0, 256) + "...";
+		}
+	}
 	
 	@SuppressWarnings("unchecked")
 	static NameValue[] mergeNameValueArray(String targetName, NameValue[] myPropArray, NameValue[] superPropArray) {
@@ -259,11 +340,11 @@ public class NameValue {
 				} else if (!superConfigPropList.contains(p.getName())
 						|| noInheritPropList.contains(p.getName())) {
 					//親定義では宣言されていないプロパティ、もしくはオーバーライドしないプロパティ
-					if (logger.isDebugEnabled()) {
+					if (logger.isTraceEnabled()) {
 						if (noInheritPropList.contains(p.getName())) {
-							logger.debug(targetName + "." + p.getName() + " is not inherit, so hole override parent's configration.");
+							logger.trace(targetName + "." + p.getName() + " is not inherit, so hole override parent's configration.");
 						} else {
-							logger.debug(targetName + "." + p.getName() + " is added.");
+							logger.trace(targetName + "." + p.getName() + " is added.");
 						}
 					}
 					if (sp == null) {
@@ -280,8 +361,8 @@ public class NameValue {
 					//オーバーライドするプロパティ
 					if (p.isAdditional()) {
 						//additional mode
-						if (logger.isDebugEnabled()) {
-							logger.debug(targetName + "." + p.getName() + " is override(additional mode).");
+						if (logger.isTraceEnabled()) {
+							logger.trace(targetName + "." + p.getName() + " is override(additional mode).");
 						}
 						if (sp instanceof ArrayList) {
 							((ArrayList<NameValue>) sp).add(p);
@@ -296,8 +377,8 @@ public class NameValue {
 							//override
 							
 							if (!resetOverridePropList.contains(p.getName())) {
-								if (logger.isDebugEnabled()) {
-									logger.debug(targetName + "." + p.getName() + " is override.");
+								if (logger.isTraceEnabled()) {
+									logger.trace(targetName + "." + p.getName() + " is override.");
 								}
 								resetOverridePropList.add(p.getName());
 								if (sp instanceof ArrayList) {
@@ -316,8 +397,8 @@ public class NameValue {
 								}
 							}
 						} else {
-							if (logger.isDebugEnabled()) {
-								logger.debug(targetName + "." + p.getName() + " is declared ifnone, so Can not override configration.");
+							if (logger.isTraceEnabled()) {
+								logger.trace(targetName + "." + p.getName() + " is declared ifnone, so Can not override configration.");
 							}
 						}
 					}

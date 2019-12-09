@@ -38,9 +38,8 @@
 <%@ page import="org.iplass.gem.command.ViewUtil"%>
 
 <%!
-	String format(Date date) {
-		SimpleDateFormat format = DateUtil.getSimpleDateFormat(TemplateUtil.getLocaleFormat().getOutputDateFormat(), false);
-		return date != null ? format.format(date) : "";
+	String dateToString(Date date, String format) {
+		return date != null ? DateUtil.getSimpleDateFormat(format, false).format(date) : "";
 	}
 	Object getDefaultValue(DatePropertyEditor editor, PropertyDefinition pd) {
 		String defaultValue = editor.getDefaultValue();
@@ -60,13 +59,13 @@
 		return null;
 	}
 	Date getDefaultValue(String value) {
-		SimpleDateFormat format = DateUtil.getSimpleDateFormat(TemplateUtil.getLocaleFormat().getServerDateFormat(), false);
 		if (value != null) {
 			if ("NOW".equals(value)) {
 				//TODO 予約語の検討、X日後とか特定日付からの加減も必要？
 				return new Date(TemplateUtil.getCurrentTimestamp().getTime());
 			} else {
 				try {
+					SimpleDateFormat format = DateUtil.getSimpleDateFormat(TemplateUtil.getLocaleFormat().getServerDateFormat(), false);
 					Long l = format.parse(value).getTime();
 					return new Date(l);
 				} catch (ParseException e) {
@@ -131,7 +130,14 @@
 		if (isMultiple) {
 			//複数
 			String dummyRowId = "id_li_" + propName + "Dummmy";
+			String toggleAddBtnFunc = "toggleAddBtn_" + StringUtil.escapeJavaScript(propName);
 %>
+<script type="text/javascript">
+function <%=toggleAddBtnFunc%>() {
+	var display = $("#<%=StringUtil.escapeJavaScript(ulId)%> li:not(:hidden)").length < <%=pd.getMultiplicity()%>;
+	$("#id_addBtn_<c:out value="<%=propName%>"/>").toggle(display);
+}
+</script>
 <ul id="<c:out value="<%=ulId %>"/>" class="mb05">
 <li id="<c:out value="<%=dummyRowId %>"/>" class="list-add picker-list" style="display: none;">
 <input type="text" class="inpbr" style="<c:out value="<%=customStyle%>"/>" data-showButtonPanel=<%=!editor.isHideButtonPanel()%> data-showWeekday=<%=editor.isShowWeekday()%> />
@@ -144,15 +150,13 @@
 				length = array.length;
 				for (int i = 0; i < array.length; i++) {
 					String liId = "li_" + propName + i;
-					String str = format(array[i]);
-
-					SimpleDateFormat inSdf = DateUtil.getSimpleDateFormat(TemplateUtil.getLocaleFormat().getServerDateFormat(), false);
-					String hiddenDate = inSdf.format(array[i]);
+					String str = dateToString(array[i], TemplateUtil.getLocaleFormat().getOutputDateFormat());
+					String hiddenDate = dateToString(array[i], TemplateUtil.getLocaleFormat().getServerDateFormat());
 					String onchange = "dateChange('" + StringUtil.escapeJavaScript(liId) + "')";
 %>
 <li id="<c:out value="<%=liId%>"/>" class="list-add picker-list">
 <input type="text" id="d_<c:out value="<%=liId%>"/>" class="inpbr datepicker" style="<c:out value="<%=customStyle%>"/>" value="<c:out value="<%=str%>"/>" onchange="<%=onchange%>" data-showButtonPanel="<%=!editor.isHideButtonPanel()%>" data-showWeekday=<%=editor.isShowWeekday()%> />
-<input type="button" value="${m:rs('mtp-gem-messages', 'generic.editor.date.DatePropertyEditor_Edit.delete')}" class="gr-btn-02 del-btn" onclick="deleteItem('<%=StringUtil.escapeJavaScript(liId)%>')" />
+<input type="button" value="${m:rs('mtp-gem-messages', 'generic.editor.date.DatePropertyEditor_Edit.delete')}" class="gr-btn-02 del-btn" onclick="deleteItem('<%=StringUtil.escapeJavaScript(liId)%>', <%=toggleAddBtnFunc%>)" />
 <input type="hidden" id="i_<c:out value="<%=liId%>"/>" name="<c:out value="<%=propName%>"/>" value="<c:out value="<%=hiddenDate%>"/>" />
 <script type="text/javascript">
 $(function() {
@@ -164,9 +168,11 @@ $(function() {
 <%
 				}
 			}
+			String addBtnStyle = "";
+			if (array != null && array.length >= pd.getMultiplicity()) addBtnStyle = "display: none;";
 %>
 </ul>
-<input type="button" id="id_addBtn_<c:out value="<%=propName%>"/>" value="${m:rs('mtp-gem-messages', 'generic.editor.date.DatePropertyEditor_Edit.add')}" class="gr-btn-02 add-btn" onclick="addDateItem('<%=StringUtil.escapeJavaScript(ulId)%>', <%=pd.getMultiplicity() + 1%>, '<%=StringUtil.escapeJavaScript(dummyRowId)%>', '<%=StringUtil.escapeJavaScript(propName)%>', 'id_count_<%=StringUtil.escapeJavaScript(propName)%>')" />
+<input type="button" id="id_addBtn_<c:out value="<%=propName%>"/>" value="${m:rs('mtp-gem-messages', 'generic.editor.date.DatePropertyEditor_Edit.add')}" class="gr-btn-02 add-btn" style="<%=addBtnStyle%>" onclick="addDateItem('<%=StringUtil.escapeJavaScript(ulId)%>', <%=pd.getMultiplicity() + 1%>, '<%=StringUtil.escapeJavaScript(dummyRowId)%>', '<%=StringUtil.escapeJavaScript(propName)%>', 'id_count_<%=StringUtil.escapeJavaScript(propName)%>', <%=toggleAddBtnFunc%>, <%=toggleAddBtnFunc%>)" />
 <input type="hidden" id="id_count_<c:out value="<%=propName%>"/>" value="<c:out value="<%=length%>"/>" />
 <%
 		} else {
@@ -178,8 +184,7 @@ $(function() {
 			String hiddenDate = "";
 
 			if (propValue instanceof Date) {
-				SimpleDateFormat inSdf = DateUtil.getSimpleDateFormat(TemplateUtil.getLocaleFormat().getServerDateFormat(), false);
-				hiddenDate = inSdf.format(propValue);
+				hiddenDate = dateToString((Date)propValue, TemplateUtil.getLocaleFormat().getServerDateFormat());
 			}
 			String onchange = "dateChange('" + StringUtil.escapeJavaScript(propName) + "')";
 %>

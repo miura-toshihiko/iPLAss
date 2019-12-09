@@ -25,6 +25,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -389,7 +390,7 @@ public class MetaDataContext {
 	private void doUpdate(final String path, final RootMetaData metaData, final MetaDataConfig config, final boolean doAutoReload, final boolean doReloadAfterCommit) {
 		//idから既存を取得して、パスの変更があるかどうかチェック
 		//まだ同一トランザクション中などで反映されていない可能性があるので、リポジトリから直接取得する
-		final MetaDataEntry current = repository.loadById(tenantId, metaData.getId(), true);
+		final MetaDataEntry current = getMetaDataEntryByIdDirect(metaData.getId());
 
 		if (current == null) {
 			throw new MetaDataRuntimeException(tenantId + "'s " + path+ "(" + metaData.getId() + ") MetaData is currently no exsits.");
@@ -428,6 +429,11 @@ public class MetaDataContext {
 				repository.update(tenantId, toStore);
 
 				if (config != null) {
+					
+					if (current.getRepositryType() == RepositoryType.SHARED) {
+						toStore.setRepositryType(RepositoryType.SHARED_OVERWRITE);
+					}
+
 					updateConfigRepository(toStore, config, false);	//ここではリロードする必要なし
 				}
 
@@ -438,6 +444,25 @@ public class MetaDataContext {
 
 		});
 
+	}
+
+	private MetaDataEntry getMetaDataEntryByIdDirect(String id) {
+		boolean isShared = tcService.getSharedTenantId() == tenantId;
+		MetaDataEntry entry = repository.loadById(tenantId, id, isShared);
+		checkShared(entry);
+		
+		//shared check
+		if (entry == null && tcService.getSharedTenantId() != tenantId) {
+			MetaDataContext sharedContext = tcService.getSharedTenantContext().getMetaDataContext();
+			entry = sharedContext.getMetaDataEntryById(id);
+			if (entry != null && entry.isSharable()) {
+				entry = entry.copy();
+				entry.setRepositryType(RepositoryType.SHARED);
+			} else {
+				entry = null;
+			}
+		}
+		return entry;
 	}
 
 	private void doAfterUpdateProccess(String path, MetaDataEntry current, String pathBefore) {
@@ -588,6 +613,7 @@ public class MetaDataContext {
 	 */
 	private void updateConfigRepository(final MetaDataEntry meta, final MetaDataConfig config, final boolean doAutoReload) {
 
+		
 		if (meta.getRepositryType() == RepositoryType.SHARED) {
 			throw new MetaDataRuntimeException(meta.getPath() + "(" + meta.getMetaData().getId() + ") MetaData not allowed change config.");
 		}
@@ -623,7 +649,7 @@ public class MetaDataContext {
 					//すでにオーバーライト済みのメタデータが存在する場合、更新できない。
 					if (meta.isSharable() && !config.isSharable()
 							|| meta.isSharable() && meta.isOverwritable() && !config.isOverwritable()) {
-						if (repository.hasOverwriteMetaData(tenantId, meta)) {
+						if (hasOverwriteMetaData(meta)) {
 							throw new MetaDataRuntimeException(meta.getPath() + " MetaData is already shared and overwrote.so can not change config to no share or no overwrite.");
 						}
 					}
@@ -646,6 +672,17 @@ public class MetaDataContext {
 
 		});
 
+	}
+	
+	private boolean hasOverwriteMetaData(MetaDataEntry meta) {
+		List<Integer> list = repository.getTenantIdsOf(meta.getMetaData().getId());
+		if (list.size() == 0) {
+			return false;
+		}
+		if (list.contains(tcService.getSharedTenantId()) && list.size() == 1) {
+			return false;
+		}
+		return true;
 	}
 
 	/**
@@ -746,6 +783,35 @@ public class MetaDataContext {
 		return list;
 	}
 	
+	public List<MetaDataEntryInfo> invalidDefinitionList(final String prefixPath) {
+		String path = prefixPath;
+		if (!path.endsWith("/")) {
+			path = path + "/";
+		}
+		boolean isShared = tcService.getSharedTenantId() == tenantId;
+		MetaDataContext sharedContext = null;
+		if (!isShared) {
+			sharedContext = tcService.getSharedTenantContext().getMetaDataContext();
+		}
+		
+		List<MetaDataEntryInfo> localList = repository.definitionList(tenantId, path, isShared, true);
+		List<MetaDataEntryInfo> invalidList = new LinkedList<>();
+		for (MetaDataEntryInfo e: localList) {
+			if (e.getState() == State.INVALID) {
+				if (!isShared) {
+					MetaDataEntry entry = sharedContext.getMetaDataEntryById(e.getId());
+					if (entry == null || !entry.isSharable()) {
+						invalidList.add(e);
+					}
+				} else {
+					invalidList.add(e);
+				}
+			}
+		}
+		
+		return invalidList;
+	}
+
 	public boolean exists(String prefixPath, String subPath) {
 		if (!prefixPath.endsWith("/")) {
 			prefixPath = prefixPath + "/";
@@ -778,7 +844,9 @@ public class MetaDataContext {
 	 * @return オーバーライトテナントIDのリスト
 	 */
 	public List<Integer> getOverwriteTenantIdList(String metaDataId) {
-		return repository.getOverwriteTenantIdList(tcService.getSharedTenantId(), metaDataId);
+		List<Integer> res = repository.getTenantIdsOf(metaDataId);
+		res.removeIf(tid -> tid.equals(tcService.getSharedTenantId()));
+		return res;
 	}
 
 	/**
@@ -889,22 +957,6 @@ public class MetaDataContext {
 			}
 		}
 
-		private void checkShared(MetaDataEntry entry) {
-			if (entry != null ){
-				if( tcService.getSharedTenantId() != tenantId) {
-
-					MetaDataContext sharedContext = tcService.getSharedTenantContext().getMetaDataContext();
-					MetaDataEntry sharedEntry = sharedContext.getMetaDataEntry(entry.getPath());
-
-					if (sharedEntry != null && sharedEntry.isSharable()) {
-						entry.setRepositryType(RepositoryType.SHARED_OVERWRITE);
-					}
-				}else{
-					entry.setRepositryType(RepositoryType.TENANT_LOCAL);
-				}
-			}
-		}
-
 		@Override
 		public List<MetaDataEntry> loadByIndex(int index, Object indexVal) {
 			boolean isShared = tcService.getSharedTenantId() == tenantId;
@@ -934,6 +986,22 @@ public class MetaDataContext {
 			return value.getVersion();
 		}
 
+	}
+
+	private void checkShared(MetaDataEntry entry) {
+		if (entry != null) {
+			if(tcService.getSharedTenantId() != tenantId) {
+
+				MetaDataContext sharedContext = tcService.getSharedTenantContext().getMetaDataContext();
+				MetaDataEntry sharedEntry = sharedContext.getMetaDataEntry(entry.getPath());
+
+				if (sharedEntry != null && sharedEntry.isSharable()) {
+					entry.setRepositryType(RepositoryType.SHARED_OVERWRITE);
+				}
+			} else {
+				entry.setRepositryType(RepositoryType.TENANT_LOCAL);
+			}
+		}
 	}
 
 	private class MetaDataDefinitionCacheLogic implements LoadingAdapter<String, MetaDataDefinitionCacheEntry> {

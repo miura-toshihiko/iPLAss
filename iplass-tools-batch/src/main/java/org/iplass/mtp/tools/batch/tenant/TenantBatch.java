@@ -21,6 +21,16 @@
 package org.iplass.mtp.tools.batch.tenant;
 
 
+import java.io.IOException;
+import java.io.Reader;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Properties;
+
+import org.iplass.mtp.SystemException;
 import org.iplass.mtp.impl.core.ExecuteContext;
 import org.iplass.mtp.impl.tools.tenant.TenantCreateParameter;
 import org.iplass.mtp.impl.tools.tenant.TenantDeleteParameter;
@@ -28,7 +38,6 @@ import org.iplass.mtp.impl.tools.tenant.TenantInfo;
 import org.iplass.mtp.impl.tools.tenant.TenantToolService;
 import org.iplass.mtp.impl.tools.tenant.log.LogHandler;
 import org.iplass.mtp.spi.ServiceRegistry;
-import org.iplass.mtp.tools.ToolsBatchResourceBundleUtil;
 import org.iplass.mtp.tools.batch.MtpCuiBase;
 import org.iplass.mtp.tools.gui.tenant.TenantManagerApp;
 import org.iplass.mtp.util.StringUtil;
@@ -39,8 +48,11 @@ import org.iplass.mtp.util.StringUtil;
  */
 public class TenantBatch extends MtpCuiBase {
 
+	/** Silentモード 設定ファイル名キー */
+	public static final String KEY_CONFIG_FILE = "tenant.config";
+
 	/** 実行モード */
-	public enum TenantBatchExecMode {GUI, CREATE, DELETE, SHOW};
+	public enum TenantBatchExecMode {GUI, CREATE, DELETE, SHOW, SILENT};
 
 	//実行モード
 	private TenantBatchExecMode execMode = TenantBatchExecMode.GUI;
@@ -49,7 +61,6 @@ public class TenantBatch extends MtpCuiBase {
 
 	/**
 	 * args[0]・・・execMode
-	 * args[1]・・・language
 	 **/
 	public static void main(String[] args) {
 
@@ -65,7 +76,6 @@ public class TenantBatch extends MtpCuiBase {
 
 	/**
 	 * args[0]・・・execMode
-	 * args[1]・・・language
 	 **/
 	public TenantBatch(String... args) {
 
@@ -73,15 +83,7 @@ public class TenantBatch extends MtpCuiBase {
 			if (args.length > 0 && args[0] != null) {
 				setExecMode(TenantBatchExecMode.valueOf(args[0].toUpperCase()));
 			}
-			if (args.length > 1 && args[1] != null) {
-				//systemの場合は、JVMのデフォルトを利用
-				if (!"system".equals(args[1].toLowerCase())) {
-					setLanguage(args[1]);
-				}
-			}
 		}
-
-		setupLanguage();
 	}
 
 	/**
@@ -126,6 +128,11 @@ public class TenantBatch extends MtpCuiBase {
 			showAllTenantList();
 			logInfo("");
 			return true;
+		case SILENT :
+			logInfo("■Start Silent");
+			logInfo("");
+
+			return startSilent();
 		default :
 			logError("unsupport execute mode : " + getExecMode());
 			return false;
@@ -159,7 +166,7 @@ public class TenantBatch extends MtpCuiBase {
 			setSuccess(isSuccess);
 
 		} catch (Throwable e) {
-			logError(getCommonResourceMessage("errorMsg", e.getMessage()), e);
+			logError(rs("Common.errorMsg", e.getMessage()), e);
 		} finally {
 			logInfo("");
 			logInfo("■Execute Result :" + (isSuccess() ? "SUCCESS" : "FAILED"));
@@ -240,34 +247,54 @@ public class TenantBatch extends MtpCuiBase {
 
 		//Admin PW
 		String adminPW = null;
+		boolean invalidateAdminPW = true;
 		do {
-			adminPW = readConsolePassword(rs("TenantBatch.Create.Wizard.inputAdminPWMsg"));
-			if (StringUtil.isEmpty(adminPW)) {
-				logWarn(rs("TenantBatch.Create.Wizard.requiredAdminPWMsg"));
+			do {
+				adminPW = readConsolePassword(rs("TenantBatch.Create.Wizard.inputAdminPWMsg"));
+				if (StringUtil.isEmpty(adminPW)) {
+					logWarn(rs("TenantBatch.Create.Wizard.requiredAdminPWMsg"));
+					adminPW = null;
+				}
+			} while(adminPW == null);
+
+			//Confirm Admin PW
+			String confirmAdminPW = null;
+			do {
+				confirmAdminPW = readConsolePassword(rs("TenantBatch.Create.Wizard.inputReTypeAdminPWMsg"));
+				if (StringUtil.isEmpty(confirmAdminPW)) {
+					logWarn(rs("TenantBatch.Create.Wizard.requiredAdminPWMsg"));
+					confirmAdminPW = null;
+				}
+			} while(confirmAdminPW == null);
+
+			if (!adminPW.equals(confirmAdminPW)) {
+				logWarn(rs("TenantBatch.Create.Wizard.unmatchAdminPWMsg"));
 				adminPW = null;
+				confirmAdminPW = null;
+			} else {
+				invalidateAdminPW = false;
 			}
-		} while(adminPW == null);
+
+		} while(invalidateAdminPW);
 
 		TenantCreateParameter param = new TenantCreateParameter(tenantName, adminUserId, adminPW);
 		param.setTenantUrl(tenantUrl);
-		param.setUseLanguages(getLanguage());
+		param.setUseLanguages(toolService.getDefaultEnableLanguages());
 
 		//デフォルトスキップチェック
 		boolean isDefault = readConsoleBoolean(rs("TenantBatch.Create.Wizard.confirmDefaultMsg"), false);
 
 		if (!isDefault) {
-			String tenantDisplayName = readConsole(rs("TenantBatch.Create.Wizard.inputTenantDispNameMsg") + "(" + param.getTenantDisplayName() + ")");
+			String tenantDisplayName = readConsole(rs("TenantBatch.Create.Wizard.inputTenantDispNameMsg"));
 			if (StringUtil.isNotBlank(tenantDisplayName)) {
 				param.setTenantDisplayName(tenantDisplayName);
 			}
-			String topURL = readConsole(rs("TenantBatch.Create.Wizard.inputTopUrlMsg") + "(" + param.getTopUrl() + ")");
+			String topURL = readConsole(rs("TenantBatch.Create.Wizard.inputTopUrlMsg"));
 			if (StringUtil.isNotBlank(topURL)) {
 				param.setTopUrl(topURL);
 			}
 			String lang = readConsole(rs("TenantBatch.Create.Wizard.useMultiLangMsg"));
-			if (StringUtil.isNotBlank(lang)) {
-				param.setUseLanguages(lang);
-			}
+			param.setUseLanguages(lang);
 
 			boolean isBlank = readConsoleBoolean(rs("TenantBatch.Create.Wizard.createBlankTenantMsg"), false);
 			param.setCreateBlankTenant(isBlank);
@@ -320,7 +347,7 @@ public class TenantBatch extends MtpCuiBase {
 			setSuccess(isSuccess);
 
 		} catch (Throwable e) {
-			logError(getCommonResourceMessage("errorMsg", e.getMessage()));
+			logError(rs("Common.errorMsg", e.getMessage()));
 		} finally {
 			logInfo("");
 			logInfo("■Execute Result :" + (isSuccess() ? "SUCCESS" : "FAILED"));
@@ -355,7 +382,7 @@ public class TenantBatch extends MtpCuiBase {
 	private boolean startDeleteWizard() {
 
 		//テナントURL
-		String tenantUrl = readConsole(getCommonResourceMessage("inputTenantUrlMsg"));
+		String tenantUrl = readConsole(rs("Common.inputTenantUrlMsg"));
 
 		if (StringUtil.isEmpty(tenantUrl) || tenantUrl.equalsIgnoreCase("-show")) {
 			//一覧を出力
@@ -371,7 +398,7 @@ public class TenantBatch extends MtpCuiBase {
 		//存在チェック
 		TenantInfo tenant = toolService.getTenantInfo(tenantUrl);
 		if (tenant == null) {
-			logWarn(getCommonResourceMessage("notExistsTenantMsg", tenantUrl));
+			logWarn(rs("Common.notExistsTenantMsg", tenantUrl));
 			return startDeleteWizard();
 		}
 
@@ -408,8 +435,129 @@ public class TenantBatch extends MtpCuiBase {
 		return ret;
 	}
 
-	private String rs(String key, Object... args) {
-		return ToolsBatchResourceBundleUtil.resourceString(getLanguage(), key, args);
+	private boolean startCreateSilent(Properties prop) {
+		// テナント名
+		String tenantName = prop.getProperty("tenantName");
+		if (StringUtil.isBlank(tenantName)) {
+			logError(rs("TenantBatch.Silent.requiredTenantNameMsg"));
+			return false;
+		}
+
+		// 管理者ID
+		String adminUserId = prop.getProperty("adminUserId");
+		if (StringUtil.isBlank(adminUserId)) {
+			logError(rs("TenantBatch.Silent.requiredAdminUserIdMsg"));
+			return false;
+		}
+
+		// 管理者パスワード
+		String adminPassword = prop.getProperty("adminPassword");
+		if (StringUtil.isBlank(adminPassword)) {
+			logError(rs("TenantBatch.Silent.requiredAdminPasswordMsg"));
+			return false;
+		}
+
+		TenantCreateParameter createParam = new TenantCreateParameter(tenantName, adminUserId, adminPassword);
+
+		// テナントURL
+		String tenantUrl = prop.getProperty("tenantUrl");
+		if (StringUtil.isNotBlank(tenantUrl)) {
+			createParam.setTenantUrl(tenantUrl);
+		}
+
+		// テナントURL存在チェック
+		if (toolService.existsURL(createParam.getTenantUrl())) {
+			logError(rs("TenantBatch.Silent.existsTenantMsg", createParam.getTenantUrl()));
+			return false;
+		}
+
+		// テナント表示名
+		String tenantDisplayName = prop.getProperty("tenantDisplayName");
+		if (tenantDisplayName != null) {
+			createParam.setTenantDisplayName(tenantDisplayName);
+		}
+
+		// TOP画面URL
+		String topUrl = prop.getProperty("topUrl");
+		if (topUrl != null) {
+			createParam.setTopUrl(topUrl);
+		}
+
+		// 利用言語
+		String useLanguages = prop.getProperty("useLanguages");
+		if (useLanguages != null) {
+			createParam.setUseLanguages(useLanguages);
+		} else {
+			createParam.setUseLanguages(toolService.getDefaultEnableLanguages());
+		}
+
+		// ブランクテナントの作成
+		String createBlankTenant = prop.getProperty("createBlankTenant");
+		if (createBlankTenant != null) {
+			createParam.setCreateBlankTenant(Boolean.parseBoolean(createBlankTenant));
+		}
+
+		// サブパーティション利用有無
+		String mySqlUseSubPartition = prop.getProperty("mySqlUseSubPartition");
+		if (mySqlUseSubPartition != null) {
+			createParam.setMySqlUseSubPartition(Boolean.parseBoolean(mySqlUseSubPartition));
+		}
+
+		// テナント作成者
+		String registId = prop.getProperty("registId");
+		if (registId != null) {
+			createParam.setRegistId(registId);
+		}
+
+		// 実行情報出力
+		logArguments(createParam);
+
+		// テナント作成実行
+		return executeCreate(createParam);
+	}
+
+	private boolean startSilent() {
+		// ConsoleのLogListenerを一度削除してLog出力に切り替え
+		LogListner consoleLogListener = getConsoleLogListner();
+		removeLogListner(consoleLogListener);
+		LogListner loggingListener = getLoggingLogListner();
+		addLogListner(loggingListener);
+
+		// 設定ファイル名取得
+		String configFileName = System.getProperty(KEY_CONFIG_FILE);
+		if (StringUtil.isBlank(configFileName)) {
+			logError(rs("TenantBatch.Silent.requiredConfigFileMsg", KEY_CONFIG_FILE));
+			return false;
+		}
+
+		// 設定ファイルロード
+		Properties prop = new Properties();
+		try {
+			Path path = Paths.get(configFileName);
+			if (Files.exists(path)) {
+				logDebug("load config file from file path:" + configFileName);
+				try (Reader reader = Files.newBufferedReader(path)) {
+					prop.load(reader);
+				}
+			} else {
+				URL url = TenantBatch.class.getResource(configFileName);
+				if (url != null) {
+					logDebug("load config file from classpath:" + configFileName);
+					try (Reader reader = Files.newBufferedReader(Paths.get(url.toURI()))) {
+						prop.load(reader);
+					}
+				} else {
+					logError(rs("TenantBatch.Silent.notExistsConfigFileMsg", configFileName));
+					return false;
+				}
+			}
+		} catch (IOException | URISyntaxException e) {
+			throw new SystemException(e);
+		}
+
+		boolean ret = startCreateSilent(prop);
+
+		return ret;
 	}
 
 	private class TenantBatchLogListener implements LogHandler {

@@ -1,19 +1,19 @@
 /*
  * Copyright (C) 2013 INFORMATION SERVICES INTERNATIONAL - DENTSU, LTD. All Rights Reserved.
- * 
+ *
  * Unless you have purchased a commercial license,
  * the following license terms apply:
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
  * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.iplass.adminconsole.client.base.ui.widget.GridActionImgButton;
+import org.iplass.adminconsole.client.base.ui.widget.MtpTreeGrid;
 import org.iplass.adminconsole.client.base.util.SmartGWTUtil;
 import org.iplass.adminconsole.client.tools.data.entityexplorer.SimpleEntityInfoTreeDS;
 import org.iplass.adminconsole.client.tools.data.entityexplorer.SimpleEntityInfoTreeDS.FIELD_NAME;
@@ -33,17 +34,21 @@ import com.smartgwt.client.types.SelectionAppearance;
 import com.smartgwt.client.widgets.Canvas;
 import com.smartgwt.client.widgets.grid.HoverCustomizer;
 import com.smartgwt.client.widgets.grid.ListGridRecord;
-import com.smartgwt.client.widgets.tree.TreeGrid;
 import com.smartgwt.client.widgets.tree.TreeGridField;
 import com.smartgwt.client.widgets.tree.TreeNode;
 import com.smartgwt.client.widgets.tree.events.DataArrivedEvent;
 import com.smartgwt.client.widgets.tree.events.DataArrivedHandler;
 
-public class EntityTreeGrid extends TreeGrid {
+public class EntityTreeGrid extends MtpTreeGrid {
 
 	private static final String ERROR_ICON = "[SKINIMG]/actions/exclamation.png";
 
+	/** 除外パスリスト */
+	private List<String> disabledPathList = null;
+
 	public EntityTreeGrid() {
+		super(true);
+
 		setLeaveScrollbarGap(false);
 		setCanSort(false);
 		setCanFreezeFields(false);
@@ -70,27 +75,13 @@ public class EntityTreeGrid extends TreeGrid {
 		});
 	}
 
+	public void setDisabledPathList(List<String> disabledPathList) {
+		this.disabledPathList = disabledPathList;
+	}
+
 	@Override
 	protected Canvas createRecordComponent(final ListGridRecord record, Integer colNum) {
 		final String fieldName = this.getFieldName(colNum);
-//		if ("explorerButton".equals(fieldName)) {
-//			if (!record.getAttributeAsBoolean("isError")){
-//				GridActionImgButton recordCanvas = new GridActionImgButton();
-//				recordCanvas.setActionButtonSrc(EXPLORER_ICON);
-//				recordCanvas.setActionButtonPrompt(SmartGWTUtil.getHoverString("選択EntityのMetaData編集画面を表示します。"));
-//				recordCanvas.addActionClickHandler(new ClickHandler() {
-//
-//					@Override
-//					public void onClick(ClickEvent event) {
-//						String name = record.getAttributeAsString("name");
-//						MetaDataSettingTreeGrid.showMetaDataEditPane(
-//								MetaDataConstants.META_PREFIX_PATH_ENTITY, name);
-//						//showExplorer(name);
-//					}
-//				});
-//				return recordCanvas;
-//			}
-//		} else if ("error".equals(fieldName)) {
 		if ("error".equals(fieldName)) {
 			if (record.getAttributeAsBoolean("isError")){
 				record.setEnabled(false);
@@ -98,6 +89,13 @@ public class EntityTreeGrid extends TreeGrid {
 				recordCanvas.setActionButtonSrc(ERROR_ICON);
 				recordCanvas.setActionButtonPrompt(record.getAttributeAsString("errorMessage"));
 				return recordCanvas;
+			}
+		} else if (FIELD_NAME.PATH.name().equals(fieldName)) {
+			if (disabledPathList != null) {
+				String path = record.getAttributeAsString(FIELD_NAME.PATH.name());
+				if (disabledPathList.contains(path)) {
+					record.setEnabled(false);
+				}
 			}
 		}
 		return null;
@@ -166,7 +164,7 @@ public class EntityTreeGrid extends TreeGrid {
 	public List<String> getSelectedPathList() {
 		//中間レコードは除外して取得
 		ListGridRecord[] records = getSelectedRecords(true);
-		List<String> selectPaths = new ArrayList<String>();
+		List<String> selectPaths = new ArrayList<>();
 		for (ListGridRecord record : records) {
 			String path = record.getAttribute(FIELD_NAME.PATH.name());
 			//Rootは除外

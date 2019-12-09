@@ -64,19 +64,18 @@ import org.iplass.mtp.impl.rdb.mysql.MysqlRdbAdaptor;
 import org.iplass.mtp.impl.tools.tenant.TenantCreateParameter;
 import org.iplass.mtp.impl.tools.tenant.TenantToolService;
 import org.iplass.mtp.spi.ServiceRegistry;
-import org.iplass.mtp.tools.ToolsBatchResourceBundleUtil;
 import org.iplass.mtp.tools.batch.tenant.TenantBatch;
 import org.iplass.mtp.tools.batch.tenant.TenantBatch.TenantBatchExecMode;
+import org.iplass.mtp.tools.gui.MtpJDialogBase;
 import org.iplass.mtp.util.StringUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@SuppressWarnings("serial")
-public class TenantCreateDialog extends JDialog {
+public class TenantCreateDialog extends MtpJDialogBase {
+
+	private static final long serialVersionUID = -8293278349056121678L;
 
 	private static Logger logger = LoggerFactory.getLogger(TenantCreateDialog.class);
-
-	private String language;
 
 	private TenantToolService toolService = ServiceRegistry.getRegistry().getService(TenantToolService.class);
 	private I18nService i18nService = ServiceRegistry.getRegistry().getService(I18nService.class);
@@ -93,6 +92,7 @@ public class TenantCreateDialog extends JDialog {
 	protected JTextField txtAdminUserId;
 
 	protected JPasswordField txtAdminUserPass;
+	protected JPasswordField txtConfirmAdminUserPass;
 
 	protected JTextField txtTopUrl;
 	protected JCheckBox chkTopUrl;
@@ -111,10 +111,8 @@ public class TenantCreateDialog extends JDialog {
 
 	protected List<ChangeListener> dataChangeListners = new ArrayList<ChangeListener>();
 
-	public TenantCreateDialog(Frame owner, String language) {
+	public TenantCreateDialog(Frame owner) {
 		super(owner);
-
-		setLanguage(language);
 
 		if (i18nService.getEnableLanguagesMap() != null) {
 			for (String languageKey : i18nService.getEnableLanguagesMap().keySet()) {
@@ -132,18 +130,10 @@ public class TenantCreateDialog extends JDialog {
 		dataChangeListners.add(listner);
 	}
 
-	private String getLanguage() {
-		return language;
-	}
-
-	private void setLanguage(String language) {
-		this.language = language;
-	}
-
 	protected void createDialog() {
 
 		setTitle("Create Tenant");
-		setBounds(64, 64, 300, 520);
+		setBounds(64, 64, 300, 530);
 
 		setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
 		setLocationRelativeTo(null);//中央表示
@@ -226,10 +216,12 @@ public class TenantCreateDialog extends JDialog {
 		gridbag.setConstraints(dummy, constraints);
 		inputPane.add(dummy);
 
+		int rowIndex = 0;
+
 		JLabel lblName = new JLabel("*name");
 		txtName = new JTextField();
 		txtName.setPreferredSize(new Dimension(200, 25));
-		createLableText(lblName, txtName, null, 0, gridbag, constraints, inputPane);
+		createLableText(lblName, txtName, null, rowIndex++, gridbag, constraints, inputPane);
 		txtName.addKeyListener(new KeyListener() {
 
 			@Override
@@ -246,15 +238,20 @@ public class TenantCreateDialog extends JDialog {
 			}
 		});
 
-		JLabel lblAdminUserId = new JLabel("*AdminUserId");
+		JLabel lblAdminUserId = new JLabel("*Admin User Id");
 		txtAdminUserId = new JTextField();
 		txtAdminUserId.setPreferredSize(new Dimension(200, 25));
-		createLableText(lblAdminUserId, txtAdminUserId, null, 1, gridbag, constraints, inputPane);
+		createLableText(lblAdminUserId, txtAdminUserId, null, rowIndex++, gridbag, constraints, inputPane);
 
-		JLabel lblAdminUserPass = new JLabel("*AdminUserPassword");
+		JLabel lblAdminUserPass = new JLabel("*Admin User Password");
 		txtAdminUserPass = new JPasswordField();
 		txtAdminUserPass.setPreferredSize(new Dimension(200, 25));
-		createLableText(lblAdminUserPass, txtAdminUserPass, null, 2, gridbag, constraints, inputPane);
+		createLableText(lblAdminUserPass, txtAdminUserPass, null, rowIndex++, gridbag, constraints, inputPane);
+
+		JLabel lblConfirmAdminUserPass = new JLabel("*Confirm Password");
+		txtConfirmAdminUserPass = new JPasswordField();
+		txtConfirmAdminUserPass.setPreferredSize(new Dimension(200, 25));
+		createLableText(lblConfirmAdminUserPass, txtConfirmAdminUserPass, null, rowIndex++, gridbag, constraints, inputPane);
 
 		JLabel lblUrl = new JLabel("*url");
 		txtUrl = new JTextField();
@@ -262,7 +259,7 @@ public class TenantCreateDialog extends JDialog {
 		txtUrl.setEditable(false);
 		chkUrl = new JCheckBox("default");
 		chkUrl.setSelected(true);
-		createLableText(lblUrl, txtUrl, chkUrl, 3, gridbag, constraints, inputPane);
+		createLableText(lblUrl, txtUrl, chkUrl, rowIndex++, gridbag, constraints, inputPane);
 		chkUrl.addItemListener(new ItemListener() {
 
 			@Override
@@ -276,13 +273,13 @@ public class TenantCreateDialog extends JDialog {
 			}
 		});
 
-		JLabel lblDisplayName = new JLabel("*displayName");
+		JLabel lblDisplayName = new JLabel("displayName");
 		txtDisplayName = new JTextField();
 		txtDisplayName.setPreferredSize(new Dimension(200, 25));
 		txtDisplayName.setEditable(false);
 		chkDisplayName = new JCheckBox("default");
 		chkDisplayName.setSelected(true);
-		createLableText(lblDisplayName, txtDisplayName, chkDisplayName, 4, gridbag, constraints, inputPane);
+		createLableText(lblDisplayName, txtDisplayName, chkDisplayName, rowIndex++, gridbag, constraints, inputPane);
 		chkDisplayName.addItemListener(new ItemListener() {
 
 			@Override
@@ -302,7 +299,7 @@ public class TenantCreateDialog extends JDialog {
 		txtTopUrl.setEditable(false);
 		chkTopUrl = new JCheckBox("default");
 		chkTopUrl.setSelected(true);
-		createLableText(lblTopUrl, txtTopUrl, chkTopUrl, 5, gridbag, constraints, inputPane);
+		createLableText(lblTopUrl, txtTopUrl, chkTopUrl, rowIndex++, gridbag, constraints, inputPane);
 		chkTopUrl.addItemListener(new ItemListener() {
 
 			@Override
@@ -322,7 +319,7 @@ public class TenantCreateDialog extends JDialog {
 		txtUseLanguages.setEditable(false);
 		chkUseLanguages = new JCheckBox("default");
 		chkUseLanguages.setSelected(true);
-		createLableText(lblUseLanguages, txtUseLanguages, chkUseLanguages, 6, gridbag, constraints, inputPane);
+		createLableText(lblUseLanguages, txtUseLanguages, chkUseLanguages, rowIndex++, gridbag, constraints, inputPane);
 		chkUseLanguages.addItemListener(new ItemListener() {
 
 			@Override
@@ -339,14 +336,14 @@ public class TenantCreateDialog extends JDialog {
 
 		chkBlankTenant = new JCheckBox("create blank Tenant");
 		chkBlankTenant.setSelected(false);
-		createCheckBoxRow(chkBlankTenant, 7, gridbag, constraints, inputPane);
+		createCheckBoxRow(chkBlankTenant, rowIndex++, gridbag, constraints, inputPane);
 
 		RdbAdapterService adapterService = ServiceRegistry.getRegistry().getService(RdbAdapterService.class);
 		RdbAdapter adapter = adapterService.getRdbAdapter();
 		if (adapter instanceof MysqlRdbAdaptor) {
 			chkMySQLSubPartition = new JCheckBox("MySQL SubPartition Use");
 			chkMySQLSubPartition.setSelected(true);
-			createCheckBoxRow(chkMySQLSubPartition, 8, gridbag, constraints, inputPane);
+			createCheckBoxRow(chkMySQLSubPartition, rowIndex++, gridbag, constraints, inputPane);
 		}
 
 		return inputPane;
@@ -470,32 +467,39 @@ public class TenantCreateDialog extends JDialog {
 			txtUrl.setText("/" + txtName.getText());
 		}
 		if (chkDisplayName.isSelected()) {
-			txtDisplayName.setText(txtName.getText());
+			txtDisplayName.setText("");
 		}
 		if (chkTopUrl.isSelected()) {
-			txtTopUrl.setText("/gem/");
+			txtTopUrl.setText("");
 		}
 		if (chkUseLanguages.isSelected()) {
-			txtUseLanguages.setText(getLanguage());
+			txtUseLanguages.setText(defaultEnableLanguages);
 		}
 	}
 
 	protected boolean inputValidate() {
 		StringBuilder messages = new StringBuilder();
 		if (txtName.getText().trim().isEmpty()) {
-			messages.append(getCommonResourceMessage("requiredMsg", "name") + "\n");
+			messages.append(rs("Common.requiredMsg", "name") + "\n");
 		}
 		if (txtAdminUserId.getText().trim().isEmpty()) {
-			messages.append(getCommonResourceMessage("requiredMsg", "AdminUserId") + "\n");
+			messages.append(rs("Common.requiredMsg", "AdminUserId") + "\n");
 		}
 		if (txtAdminUserPass.getPassword().length == 0) {
-			messages.append(getCommonResourceMessage("requiredMsg", "AdminUserPassword") + "\n");
+			messages.append(rs("Common.requiredMsg", "AdminUserPassword") + "\n");
 		}
+		if (txtConfirmAdminUserPass.getPassword().length == 0) {
+			messages.append(rs("TenantManagerApp.TenantCreateDialog.unmatchAdminPWMsg") + "\n");
+		} else {
+			String checkPW = new String(txtAdminUserPass.getPassword());
+			String confirmPW = new String(txtConfirmAdminUserPass.getPassword());
+			if (!checkPW.equals(confirmPW)) {
+				messages.append(rs("TenantManagerApp.TenantCreateDialog.unmatchAdminPWMsg") + "\n");
+			}
+		}
+
 		if (txtUrl.getText().trim().isEmpty()) {
-			messages.append(getCommonResourceMessage("requiredMsg", "url") + "\n");
-		}
-		if (txtDisplayName.getText().trim().isEmpty()) {
-			messages.append(getCommonResourceMessage("requiredMsg", "displayName") + "\n");
+			messages.append(rs("Common.requiredMsg", "url") + "\n");
 		}
 
 		if (messages.length() > 0) {
@@ -538,7 +542,7 @@ public class TenantCreateDialog extends JDialog {
 		protected TenantBatch doInBackground() throws Exception {
 			TenantBatch manager = null;
 			try {
-				manager = new TenantBatch(TenantBatchExecMode.CREATE.name(), getLanguage());
+				manager = new TenantBatch(TenantBatchExecMode.CREATE.name());
 				manager.addLogListner(new TenantBatch.LogListner() {
 
 					@Override
@@ -604,19 +608,20 @@ public class TenantCreateDialog extends JDialog {
 				TenantBatch manager = get();
 
 				if (manager.isSuccess()) {
-					JOptionPane.showMessageDialog(TenantCreateDialog.this, rs("TenantManagerApp.TenantCreateDialog.createCompleteMsg"),
+					JOptionPane.showMessageDialog(TenantCreateDialog.this,
+							rs("TenantManagerApp.TenantCreateDialog.createCompleteMsg"),
 							"INFO", JOptionPane.INFORMATION_MESSAGE);
 
 					fireTenantDataChanged();
 				} else {
-					JOptionPane.showMessageDialog(TenantCreateDialog.this, getCommonResourceMessage("errorMsg", ""),
+					JOptionPane.showMessageDialog(TenantCreateDialog.this, rs("Common.errorMsg", ""),
 							"ERROR", JOptionPane.ERROR_MESSAGE);
 				}
 			} catch (Exception e) {
-				addLog(getCommonResourceMessage("errorMsg", ""));
+				addLog(rs("Common.errorMsg", ""));
 				addLog(e.getMessage());
 
-				JOptionPane.showMessageDialog(TenantCreateDialog.this, getCommonResourceMessage("errorMsg", ""),
+				JOptionPane.showMessageDialog(TenantCreateDialog.this, rs("Common.errorMsg", ""),
 						"ERROR", JOptionPane.ERROR_MESSAGE);
 			}
 			btnCreate.setText("Create");
@@ -662,11 +667,4 @@ public class TenantCreateDialog extends JDialog {
 		}
 	}
 
-	private String rs(String key, Object... args) {
-		return ToolsBatchResourceBundleUtil.resourceString(getLanguage(), key, args);
-	}
-
-	private String getCommonResourceMessage(String subKey, Object... args) {
-		return ToolsBatchResourceBundleUtil.commonResourceString(getLanguage(), subKey, args);
-	}
 }

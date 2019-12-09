@@ -22,12 +22,13 @@ package org.iplass.gem.command.generic.delete;
 
 import java.util.List;
 
+import org.iplass.gem.GemConfigService;
 import org.iplass.gem.command.Constants;
+import org.iplass.gem.command.GemResourceBundleUtil;
 import org.iplass.gem.command.generic.search.DetailSearchCommand;
 import org.iplass.gem.command.generic.search.FixedSearchCommand;
 import org.iplass.gem.command.generic.search.NormalSearchCommand;
 import org.iplass.gem.command.generic.search.SearchCommandBase;
-import org.iplass.gem.command.generic.search.SearchContext;
 import org.iplass.mtp.ApplicationException;
 import org.iplass.mtp.command.RequestContext;
 import org.iplass.mtp.command.annotation.CommandClass;
@@ -37,12 +38,17 @@ import org.iplass.mtp.command.annotation.webapi.WebApiTokenCheck;
 import org.iplass.mtp.entity.DeleteOption;
 import org.iplass.mtp.entity.Entity;
 import org.iplass.mtp.entity.SearchResult;
-import org.iplass.mtp.entity.query.Query;
+import org.iplass.mtp.entity.ValidateError;
+import org.iplass.mtp.entity.definition.EntityDefinition;
+import org.iplass.mtp.spi.ServiceRegistry;
 import org.iplass.mtp.transaction.Transaction;
+import org.iplass.mtp.view.generic.BulkOperationContext;
 import org.iplass.mtp.view.generic.EntityView;
+import org.iplass.mtp.view.generic.FormViewUtil;
 import org.iplass.mtp.view.generic.SearchFormView;
-import org.iplass.mtp.webapi.definition.RequestType;
+import org.iplass.mtp.view.generic.element.section.SearchResultSection.DeleteAllCommandTransactionType;
 import org.iplass.mtp.webapi.definition.MethodType;
+import org.iplass.mtp.webapi.definition.RequestType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,7 +77,6 @@ public final class DeleteAllCommand extends DeleteCommandBase {
 	public String execute(final RequestContext request) {
 
 		String searchType = request.getParam(Constants.SEARCH_TYPE);
-
 		SearchCommandBase command = null;
 		if (Constants.SEARCH_TYPE_NORMAL.equals(searchType)) {
 			command = new NormalSearchCommand();
@@ -81,59 +86,93 @@ public final class DeleteAllCommand extends DeleteCommandBase {
 			command = new FixedSearchCommand();
 		}
 
+		String ret = Constants.CMD_EXEC_SUCCESS;
 		if (command != null) {
-			SearchContext context = command.getContext(request);
+			DeleteCommandContext context = getContext(request);
 
-			Query query = new Query();
-			query.select(Entity.OID, Entity.VERSION);
-			query.from(context.getDefName());
-			query.setWhere(context.getWhere());
-			query.setVersiond(context.isVersioned());
-			SearchResult<Entity> result = em.searchEntity(query);
+			// トランザクションタイプを取得します
+			EntityDefinition ed = context.getEntityDefinition();
+			EntityView view = evm.get(ed.getName());
+			String viewName = request.getParam(Constants.VIEW_NAME);
+			SearchFormView form= FormViewUtil.getSearchFormView(ed, view, viewName);
+			DeleteAllCommandTransactionType transactionType = form.getResultSection().getDeleteAllCommandTransactionType();
+
+			command.setSearchDelete(request, true);
+			ret = command.execute(request);
+			if (!Constants.CMD_EXEC_SUCCESS.equals(ret)) return ret;
+
+			@SuppressWarnings("unchecked")
+			SearchResult<Entity> result = (SearchResult<Entity>) request.getAttribute("result");
 
 			boolean isPurge = isPurge(context);
 			final DeleteOption option = new DeleteOption(false);
 			option.setPurge(isPurge);
 
-			//大量データを考慮してトランザクションを分割(100件毎)
-			List<Entity> list = result.getList();
-			int count = list.size();
-			int countPerHundret = count / 100;
-			if (count % 100 > 0) countPerHundret++;
-			int current = 0;
-			for (int i = 0; i < countPerHundret; i++) {
-				current = i * 100;
-				int last = current + 100;
-				if (last > list.size()) last = list.size();
-				final List<Entity> subList = list.subList(current, last);
-				Boolean ret = Transaction.requiresNew(t -> {
-					for (Entity entity : subList) {
-						try {
-							em.delete(entity, option);
-						} catch (ApplicationException e) {
-							if (logger.isDebugEnabled()) {
-								logger.debug(e.getMessage(), e);
+			try {
+				//削除前の処理を呼び出します。
+				BulkOperationContext bulkContext = context.getDeleteInterrupterHandler().beforeOperation(result.getList());
+				List<ValidateError> errors = bulkContext.getErrors();
+				List<Entity> list = bulkContext.getEntities();
+				int count = list.size();
+	
+				if (!errors.isEmpty()) {
+					request.setAttribute(Constants.MESSAGE, resourceString("command.generic.delete.DeleteAllCommand.inputErr"));
+					ret = Constants.CMD_EXEC_ERROR;
+				} else if (list.size() > 0) {
+					//トランザクションタイプによって一括か、分割かを決める(batchSize件毎)
+					int batchSize = ServiceRegistry.getRegistry().getService(GemConfigService.class).getDeleteAllCommandBatchSize();
+					if (transactionType == DeleteAllCommandTransactionType.ONCE) {
+						batchSize = count;
+					}
+					
+					int countPerBatch = count / batchSize;
+					if (count % batchSize > 0) countPerBatch++;
+					int current = 0;
+					for (int i = 0; i < countPerBatch; i++) {
+						current = i * batchSize;
+						int last = current + batchSize;
+						if (last > list.size()) last = list.size();
+						final List<Entity> subList = list.subList(current, last);
+						Boolean _ret = Transaction.requiresNew(t -> {
+							for (Entity entity : subList) {
+								try {
+									em.delete(entity, option);
+								} catch (ApplicationException e) {
+									if (logger.isDebugEnabled()) {
+										logger.debug(e.getMessage(), e);
+									}
+									request.setAttribute(Constants.MESSAGE, e.getMessage());
+									t.rollback();
+									return false;
+								}
 							}
-							request.setAttribute(Constants.MESSAGE, e.getMessage());
-							t.rollback();
-							return false;
+							return true;
+						});
+						if (!_ret) {
+							break;
 						}
 					}
-					return true;
-				});
-				if (!ret) {
-					break;
+				}
+	
+				//削除後の処理を呼び出します。
+				context.getDeleteInterrupterHandler().afterOperation(list);
+			} catch (ApplicationException e) {
+				if (logger.isDebugEnabled()) {
+					logger.debug(e.getMessage(), e);
+
+					ret = Constants.CMD_EXEC_ERROR;
+					request.setAttribute(Constants.MESSAGE, e.getMessage());
 				}
 			}
 		}
 
-		return Constants.CMD_EXEC_SUCCESS;
+		return ret;
 	}
 
-	private boolean isPurge(SearchContext context) {
+	private boolean isPurge(DeleteCommandContext context) {
 		boolean isPurge = false;
 		EntityView entityView = context.getEntityView();
-		String viewName = context.getRequest().getParam(Constants.VIEW_NAME);
+		String viewName = context.getViewName();
 		SearchFormView view = null;
 		if (viewName == null || viewName.equals("")) {
 			//デフォルトレイアウトを利用
@@ -146,6 +185,10 @@ public final class DeleteAllCommand extends DeleteCommandBase {
 		}
 		if (view != null) isPurge = view.isPurge();
 		return isPurge;
+	}
+
+	private static String resourceString(String key, Object... arguments) {
+		return GemResourceBundleUtil.resourceString(key, arguments);
 	}
 
 }

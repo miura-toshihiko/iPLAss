@@ -1,19 +1,19 @@
 /*
  * Copyright (C) 2017 INFORMATION SERVICES INTERNATIONAL - DENTSU, LTD. All Rights Reserved.
- * 
+ *
  * Unless you have purchased a commercial license,
  * the following license terms apply:
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
  * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
@@ -54,6 +54,8 @@ public abstract class ReferenceRegistHandlerBase implements ReferenceRegistHandl
 	protected EntityDefinitionManager edm = ManagerLocator.getInstance().getManager(EntityDefinitionManager.class);
 	protected EntityManager em = ManagerLocator.getInstance().getManager(EntityManager.class);
 
+	private boolean forceUpdate;
+
 	/**
 	 * 参照Entityをロードします。
 	 * @param context コンテキスト
@@ -62,7 +64,7 @@ public abstract class ReferenceRegistHandlerBase implements ReferenceRegistHandl
 	 * @param property プロパティ定義
 	 * @return Entity
 	 */
-	protected Entity loadReference(DetailCommandContext context, final Entity entity, LoadOption loadOption, ReferenceProperty property) {
+	protected Entity loadReference(RegistrationCommandContext context, final Entity entity, LoadOption loadOption, ReferenceProperty property) {
 		Entity e = null;
 		if (entity.getOid() != null) {
 			final LoadEntityContext leContext = context.getLoadEntityInterrupterHandler().beforeLoadReference(entity.getDefinitionName(), loadOption, property, LoadType.UPDATE);
@@ -91,7 +93,7 @@ public abstract class ReferenceRegistHandlerBase implements ReferenceRegistHandl
 	 * @return 入力エラーリスト
 	 */
 	@SuppressWarnings("unchecked")
-	protected List<ValidateError> registReference(DetailCommandContext context, Entity entity,
+	protected List<ValidateError> registReference(RegistrationCommandContext context, Entity entity,
 			List<String> updateProperties, String propertyName) {
 		List<ValidateError> errors = new ArrayList<ValidateError>();
 
@@ -102,7 +104,7 @@ public abstract class ReferenceRegistHandlerBase implements ReferenceRegistHandl
 				try {
 					if (entity.getOid() == null) {
 						InsertOption option = new InsertOption();
-						option.setLocalized(context.getView().isLocalizationData());
+						option.setLocalized(context.isLocalizationData());
 						em.insert(entity, option);
 						//参照プロパティのエンティティに権限が付いてるとうまく行かないケースがある
 						//→逆参照のエンティティのプロパティが権限の条件になっている等
@@ -112,9 +114,10 @@ public abstract class ReferenceRegistHandlerBase implements ReferenceRegistHandl
 					} else {
 						//Command内では常にバージョンを保持し、特定バージョンで更新する
 						UpdateOption option = new UpdateOption(false, TargetVersion.SPECIFIC);
+						option.setForceUpdate(forceUpdate);
 						option.setUpdateProperties(updateProperties);
-						option.setPurgeCompositionedEntity(context.getView().isPurgeCompositionedEntity());
-						option.setLocalized(context.getView().isLocalizationData());
+						option.setPurgeCompositionedEntity(context.isPurgeCompositionedEntity());
+						option.setLocalized(context.isLocalizationData());
 						em.update(entity, option);
 					}
 				} catch (EntityValidationException e) {
@@ -167,7 +170,7 @@ public abstract class ReferenceRegistHandlerBase implements ReferenceRegistHandl
 	 * @param rpd 参照プロパティ定義
 	 * @param refEntity 参照元Entity
 	 */
-	protected void setMappedByValue(DetailCommandContext context, Entity entity, String mappedBy, String defName,
+	protected void setMappedByValue(RegistrationCommandContext context, Entity entity, String mappedBy, String defName,
 			ReferenceProperty rpd, Entity refEntity) {
 		if (rpd.getMultiplicity() != 1) {
 			//参照が多重の場合
@@ -206,7 +209,7 @@ public abstract class ReferenceRegistHandlerBase implements ReferenceRegistHandl
 	 * @param rpd 参照プロパティ定義
 	 * @param refEntity 参照元Entity
 	 */
-	protected void delMappedByValue(DetailCommandContext context, Entity entity, String mappedBy, String defName,
+	protected void delMappedByValue(RegistrationCommandContext context, Entity entity, String mappedBy, String defName,
 			ReferenceProperty rpd, Entity refEntity) {
 		if (rpd.getMultiplicity() != 1) {
 			//参照が多重の場合
@@ -268,4 +271,8 @@ public abstract class ReferenceRegistHandlerBase implements ReferenceRegistHandl
 		return updateProperties;
 	}
 
+	@Override
+	public void setForceUpdate(boolean forceUpdate) {
+		this.forceUpdate = forceUpdate;
+	}
 }

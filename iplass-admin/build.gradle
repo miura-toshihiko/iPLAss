@@ -47,6 +47,7 @@ compileJava {
 		exclude 'org/iplass/adminconsole/client/**'
 		exclude 'org/iplass/adminconsole/trans/**'
 		exclude 'edu/ycp/cs/dh/acegwt/client/**'
+//		exclude 'com/google/gwt/user/client/**'  //これはサーバでも必要
 	}
 }
 
@@ -66,7 +67,7 @@ gwt {
 	minHeapSize = '32M'
 	maxHeapSize = '2048M'
 	logLevel = 'INFO'
-	sourceLevel = '1.8'
+	sourceLevel = 'auto'
 	compiler {
 		strict = true;
 	}
@@ -88,6 +89,7 @@ task processGwtResources(type: Sync) {
 	//GWTの対象からserverを除外
 	from ('src/main/java') {
 		exclude 'org/iplass/adminconsole/server/**'
+		exclude 'com/google/gwt/user/server/**/*.*'
 	}
 	from ('src/main/resources') {
 		exclude 'META-INF/**'
@@ -157,6 +159,8 @@ task copyGwtTransSrc(type: Sync) {
 		include 'mtp/entity/SearchResult.java'
 		include 'mtp/entity/SelectValue.java'
 
+		include 'mtp/entity/csv/MultipleFormat.java'
+
 		include 'mtp/entity/definition/DataLocalizationStrategy.java'
 		include 'mtp/entity/definition/EntityDefinition.java'
 		include 'mtp/entity/definition/EntityDefinitionModifyResult.java'
@@ -176,6 +180,8 @@ task copyGwtTransSrc(type: Sync) {
 		include 'mtp/entity/definition/listeners/EventType.java'
 		include 'mtp/entity/definition/listeners/JavaClassEventListenerDefinition.java'
 		include 'mtp/entity/definition/listeners/ScriptingEventListenerDefinition.java'
+		include 'mtp/entity/definition/listeners/SendNotificationEventListenerDefinition.java'
+		include 'mtp/entity/definition/listeners/SendNotificationType.java'
 
 		include 'mtp/entity/definition/properties/AutoNumberProperty.java'
 		include 'mtp/entity/definition/properties/BinaryProperty.java'
@@ -202,6 +208,7 @@ task copyGwtTransSrc(type: Sync) {
 
 		include 'mtp/entity/definition/validations/BinarySizeValidation.java'
 		include 'mtp/entity/definition/validations/BinaryTypeValidation.java'
+		include 'mtp/entity/definition/validations/JavaClassValidation.java'
 		include 'mtp/entity/definition/validations/LengthValidation.java'
 		include 'mtp/entity/definition/validations/NotNullValidation.java'
 		include 'mtp/entity/definition/validations/RangeValidation.java'
@@ -241,6 +248,26 @@ task copyGwtTransSrc(type: Sync) {
 	}
 
 	from ('../iplass-web/src/main/java/org/iplass') {
+
+		include 'mtp/auth/oauth/definition/ClaimMappingDefinition.java'
+		include 'mtp/auth/oauth/definition/ClientPolicyDefinition.java'
+		include 'mtp/auth/oauth/definition/ClientType.java'
+		include 'mtp/auth/oauth/definition/ConsentTypeDefinition.java'
+		include 'mtp/auth/oauth/definition/CustomTokenIntrospectorDefinition.java'
+		include 'mtp/auth/oauth/definition/GrantType.java'
+		include 'mtp/auth/oauth/definition/OAuthAuthorizationDefinition.java'
+		include 'mtp/auth/oauth/definition/OAuthClientDefinition.java'
+		include 'mtp/auth/oauth/definition/OAuthResourceServerDefinition.java'
+		include 'mtp/auth/oauth/definition/OIDCClaimScopeDefinition.java'
+		include 'mtp/auth/oauth/definition/ScopeDefinition.java'
+		include 'mtp/auth/oauth/definition/SubjectIdentifierTypeDefinition.java'
+		include 'mtp/auth/oauth/definition/introspectors/JavaClassCustomTokenIntrospectorDefinition.java'
+		include 'mtp/auth/oauth/definition/introspectors/ScriptingCustomTokenIntrospectorDefinition.java'
+		include 'mtp/auth/oauth/definition/subtypes/PairwiseSubjectIdentifierTypeDefinition.java'
+		include 'mtp/auth/oauth/definition/subtypes/PublicSubjectIdentifierTypeDefinition.java'
+		include 'mtp/auth/oauth/definition/consents/AlwaysConsentTypeDefinition.java'
+		include 'mtp/auth/oauth/definition/consents/OnceConsentTypeDefinition.java'
+		include 'mtp/auth/oauth/definition/consents/ScriptingConsentTypeDefinition.java'
 
 		include 'mtp/web/actionmapping/definition/ActionMappingDefinition.java'
 		include 'mtp/web/actionmapping/definition/ActionMappingDefinitionModifyResult.java'
@@ -298,8 +325,10 @@ task copyGwtTransSrc(type: Sync) {
 		include 'mtp/webapi/definition/EntityWebApiDefinition.java'
 		include 'mtp/webapi/definition/MethodType.java'
 		include 'mtp/webapi/definition/StateType.java'
+		include 'mtp/webapi/definition/CacheControlType.java'
 		include 'mtp/webapi/definition/WebApiDefinition.java'
 		include 'mtp/webapi/definition/WebApiDefinitionModifyResult.java'
+		include 'mtp/webapi/definition/WebApiParamMapDefinition.java'
 		include 'mtp/webapi/definition/WebApiTokenCheck.java'
 
 		include 'mtp/tenant/web/TenantWebInfo.java'
@@ -307,9 +336,10 @@ task copyGwtTransSrc(type: Sync) {
 
 	from ('../iplass-gem/src/main/java/org/iplass') {
 
+		include 'adminconsole/view/annotation/FieldOrder.java'
 		include 'adminconsole/view/annotation/IgnoreField.java.java'
-		include 'adminconsole/view/annotation/MetaFieldInfo.java'
 		include 'adminconsole/view/annotation/InputType.java'
+		include 'adminconsole/view/annotation/MetaFieldInfo.java'
 		include 'adminconsole/view/annotation/Refrectable.java'
 		include 'adminconsole/view/annotation/generic/FieldReferenceType.java'
 
@@ -327,12 +357,14 @@ task copyGwtTransSrc(type: Sync) {
 		include 'mtp/view/generic/DetailFormView.java'
 		include 'mtp/view/generic/EntityView.java'
 		include 'mtp/view/generic/FormView.java'
+		include 'mtp/view/generic/HasNestProperty.java'
 		include 'mtp/view/generic/NullOrderType.java'
 		include 'mtp/view/generic/PagingPosition.java'
 		include 'mtp/view/generic/RequiredDisplayType.java'
 		include 'mtp/view/generic/SearchFormView.java'
 		include 'mtp/view/generic/TextAlign.java'
 		include 'mtp/view/generic/ViewControlSetting.java'
+		include 'mtp/view/generic/BulkFormView.java'
 
 		include 'mtp/view/generic/common/AutocompletionProperty.java'
 		include 'mtp/view/generic/common/AutocompletionSetting.java'
@@ -408,6 +440,7 @@ task copyGwtTransSrc(type: Sync) {
 		include 'mtp/view/top/TopViewDefinition.java'
 		include 'mtp/view/top/TopViewDefinitionModifyResult.java'
 		include 'mtp/view/top/parts/ActionParts.java'
+		include 'mtp/view/top/parts/ApplicationMaintenanceParts.java'
 		include 'mtp/view/top/parts/CalendarParts.java'
 		include 'mtp/view/top/parts/CsvDownloadSettingsParts.java'
 		include 'mtp/view/top/parts/EntityListParts.java'
@@ -431,4 +464,29 @@ task copyGwtTransSrc(type: Sync) {
 	}
 
 	into "${buildDir}/src/gwt-trans/org/iplass/adminconsole/trans/org/iplass"
+}
+
+task copyStaticResources(type: Sync) {
+	dependsOn('processResources')
+
+	//静的リソースをコピー
+	from 'build/resources/main/'
+	//jar内のwebjarsフォルダ配下をコピー
+	from (configurations.wjRuntime.collect {it.isDirectory() ? it : zipTree(it)}) {
+		exclude 'META-INF/maven/'
+		exclude 'META-INF/MANIFEST.MF'
+	}
+	into 'build/tmp/staticresources'
+	includeEmptyDirs = false
+}
+
+task archiveStaticResources(type: Zip) {
+	dependsOn('copyStaticResources')
+
+	archiveName = "${project.name}-staticresources-${version}.zip"
+
+	//META-INF/resourcesをZIP圧縮
+	from ('build/tmp/staticresources/META-INF/resources') {
+		exclude 'jsp'
+	}
 }

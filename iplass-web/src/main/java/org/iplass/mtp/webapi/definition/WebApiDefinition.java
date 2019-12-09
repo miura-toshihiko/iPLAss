@@ -36,11 +36,23 @@ public class WebApiDefinition implements Definition {
 	private String name;
 	private String displayName;
 	private String description;
+	
+	/**
+	 * WebAPIキャッシュ指定。
+	 * 未指定の場合はキャッシュをしない。
+	 */
+	private CacheControlType cacheControlType;
+
+	/** WebAPIキャッシュのmax-age（秒）*/
+	private long cacheControlMaxAge = -1;
 
 	/**
 	 * このWebApiが呼び出されたときに実行するCommand。
 	 */
 	private CommandConfig commandConfig;
+
+	/** WebApiからのパラメータのCommand実行時のParameter名のマップの定義 */
+	private WebApiParamMapDefinition[] webApiParamMap;
 
 	/** このWebApiで処理されるCommandを特権（セキュリティ制約を受けない）にて処理するかどうか。デフォルトはfalse。 */
 	private boolean isPrivilaged;
@@ -100,7 +112,68 @@ public class WebApiDefinition implements Definition {
 	private StateType state = StateType.STATEFUL;
 
 	private boolean supportBearerToken;
+	
+	private String[] oauthScopes;
 
+	private String[] allowRequestContentTypes;
+
+	private Long maxRequestBodySize;
+	private Long maxFileSize;
+
+	public Long getMaxFileSize() {
+		return maxFileSize;
+	}
+
+	/**
+	 * multipart/form-data時のアップロードファイルの最大サイズ。-1の場合は無制限。
+	 * １つのファイルに対する最大サイズなので、複数のファイルの合計サイズを制限したい場合は、
+	 * maxRequestBodySizeを設定します。
+	 * 
+	 * @param maxFileSize
+	 */
+	public void setMaxFileSize(Long maxFileSize) {
+		this.maxFileSize = maxFileSize;
+	}
+
+	public Long getMaxRequestBodySize() {
+		return maxRequestBodySize;
+	}
+
+	/**
+	 * リクエストボディの最大サイズ。-1の場合は無制限。
+	 * 
+	 * @param maxRequestBodySize
+	 */
+	public void setMaxRequestBodySize(Long maxRequestBodySize) {
+		this.maxRequestBodySize = maxRequestBodySize;
+	}
+
+	public String[] getAllowRequestContentTypes() {
+		return allowRequestContentTypes;
+	}
+
+	/**
+	 * 許可するリクエストボディのContentTypeを指定。未指定の場合はすべて許可。<br>
+	 * accepts指定より、allowRequestContentTypesの指定による制限が優先されます。<br>
+	 * 例えば、
+	 * accepts指定によりJSON形式の処理が有効化されている場合において、
+	 * allowRequestContentTypesに"application/json"が含まれない場合は、
+	 * JSON形式によるリクエストは処理されません。
+	 * 
+	 * @param allowRequestContentTypes
+	 */
+	public void setAllowRequestContentTypes(String[] allowRequestContentTypes) {
+		this.allowRequestContentTypes = allowRequestContentTypes;
+	}
+	
+	public String[] getOauthScopes() {
+		return oauthScopes;
+	}
+
+	public void setOauthScopes(String[] oauthScopes) {
+		this.oauthScopes = oauthScopes;
+	}
+	
 	public boolean isSupportBearerToken() {
 		return supportBearerToken;
 	}
@@ -257,6 +330,46 @@ public class WebApiDefinition implements Definition {
 	}
 
 	/**
+	 * @see #setCacheControlType(cacheControlType)
+	 * @return cacheControlType
+	 */
+	public CacheControlType getCacheControlType() {
+		return cacheControlType;
+	}
+
+	/**
+	 * WebAPIキャッシュ指定（Cache-Controlヘッダの制御）。
+	 * 未指定の場合はキャッシュをしない。
+	 * ブラウザ種別によらず、キャッシュを有効化するためには、合わせてCacheControlMaxAgeの設定も必要。
+	 * 
+	 * @see #setCacheControlMaxAge(long)
+	 * @param cacheControlType
+	 */
+	public void setCacheControlType(CacheControlType cacheControlType) {
+		this.cacheControlType = cacheControlType;
+	}
+
+	/**
+	 * @see #setCacheControlMaxAge(long)
+	 * @return
+	 */
+	public long getCacheControlMaxAge() {
+		return cacheControlMaxAge;
+	}
+
+	/**
+	 * cacheControlMaxAge=CacheControlType.CACHEを指定した場合の
+	 * WebAPIキャッシュのmax-age（秒）を指定。
+	 * デフォルト値は-1でこの場合はmax-ageは未指定となる。<br>
+	 * <b>注意：max-age未指定の場合、FF、Chromeでは実際はキャッシュが利用されない</b>
+	 * 
+	 * @param cacheControlMaxAge
+	 */
+	public void setCacheControlMaxAge(long cacheControlMaxAge) {
+		this.cacheControlMaxAge = cacheControlMaxAge;
+	}
+
+	/**
 	 * @return commandConfig
 	 */
 	public CommandConfig getCommandConfig() {
@@ -269,6 +382,21 @@ public class WebApiDefinition implements Definition {
 	 */
 	public void setCommandConfig(CommandConfig commandConfig) {
 		this.commandConfig = commandConfig;
+	}
+
+	/**
+	 * @return paramMap
+	 */
+	public WebApiParamMapDefinition[] getWebApiParamMap() {
+		return webApiParamMap;
+	}
+
+	/**
+	 * @param webApiParamMap
+	 *            セットする webApiParamMap
+	 */
+	public void setWebApiParamMap(WebApiParamMapDefinition[] webApiParamMap) {
+		this.webApiParamMap = webApiParamMap;
 	}
 
 	/**

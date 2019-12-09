@@ -251,6 +251,38 @@ function showDetail(action, oid, version, isEdit, target, options) {
 }
 
 /**
+ * QueryStringをdecodeする
+ * @param query
+ * @returns
+ */
+function decodeQueryString(query) {
+	var ret = "";
+	if (query != null && query.length > 0 && query.charAt(0) != "&") {
+		query = "&" + query;
+	}
+	var sr = new StringReader(query);
+	var c = -1;
+	while (true) {
+		c = sr.read();
+		if (c == -1) {
+			ret = ret.slice(1);
+			break;
+		}
+		if (c == "&") {
+			var kv = parseKeyValue(sr);
+			if (kv != null) {
+				var k = decodeURIComponent(kv.key);
+				var v = (kv.val != null) ? decodeURIComponent(kv.val) : undefined;
+				//parseKeyValueの処理に併せて、&なら&&にエスケープする
+				if (typeof v !== "undefined" && v.indexOf("&") != -1) v = v.replace(/\&/g, "&&");
+				ret += "&" + k + "=" + (typeof v === "undefined" ? "" : v);
+			}
+		}
+	}
+	return ret;
+}
+
+/**
  * searchCond解析
  * @param query
  * @returns {Array}
@@ -368,9 +400,10 @@ function StringBuilder() {
  * @param id
  * @return
  */
-function deleteItem(id) {
+function deleteItem(id, delCallback) {
 	$("#" + es(id)).remove();
 	$(".fixHeight").fixHeight();
+	if (delCallback && $.isFunction(delCallback)) {delCallback.call(this, id);}
 }
 
 /**
@@ -395,6 +428,12 @@ function countUp(countId, func) {
 	var count = $("#" + countId).val() - 0;
 	func.call(this, count);
 	$("#" + countId).val(count + 1);
+}
+
+function toggleRefInsertBtn(ulId, multiplicity, insBtnId) {
+	var display = canAddItem(ulId, multiplicity);
+	$("#" + insBtnId).toggle(display);
+	$(".fixHeight").fixHeight();
 }
 
 function setCookie(name, value, days) {
@@ -708,10 +747,10 @@ function resetDetailCondition() {
  * @param selector
  * @return
  */
-function addTextItem(ulId, multiplicity, liId, propName, countId, selector, func) {
+function addTextItem(ulId, multiplicity, liId, propName, countId, selector, func, delCallback) {
 	if (canAddItem(ulId, multiplicity)) {
 		countUp(countId, function(count){
-			var $copy = copyText(liId, propName, count, selector);
+			var $copy = copyText(liId, propName, count, selector, delCallback);
 			if ($(":text", $copy).hasClass("commaFieldDummy")) {
 				$(":text", $copy).removeClass("commaFieldDummy").addClass("commaField");
 				$(":text", $copy).commaField();
@@ -730,7 +769,7 @@ function addTextItem(ulId, multiplicity, liId, propName, countId, selector, func
  * @param selector
  * @return
  */
-function copyText(liId, propName, idx, selector) {
+function copyText(liId, propName, idx, selector, delCallback) {
 	var $src = $("#" + liId);
 	var copyId = "li_" + propName + idx;
 	var $copy = clone($src, copyId);
@@ -739,7 +778,7 @@ function copyText(liId, propName, idx, selector) {
 	var $button = $(":button", $copy);
 
 	$text.attr("name", propName);
-	$button.click(function() {deleteItem(copyId);});
+	$button.click(function() {deleteItem(copyId, delCallback);});
 
 	return $copy;
 }
@@ -756,7 +795,7 @@ function numcheck(element) {
 	}
 	//数値変換可能かをチェック
 	if (isNaN(v)) {
-		alert(scriptContext.locale.numcheckMsg);
+		alert(scriptContext.gem.locale.common.numcheckMsg);
 		element.value = "";
 		return;
 	}
@@ -855,15 +894,16 @@ function dateToHidden($date, $hidden) {
  * @param countId
  * @return
  */
-function addDateItem(ulId, multiplicity, dummyRowId, propName, countId) {
+function addDateItem(ulId, multiplicity, dummyRowId, propName, countId, func, delCallback) {
 	if (canAddItem(ulId, multiplicity)) {
 		countUp(countId, function(count) {
-			copyDate(dummyRowId, propName, count);
+			var $copy = copyDate(dummyRowId, propName, count, delCallback);
+			if (func && $.isFunction(func)) func.call(this, $copy);
 		});
 		$(".fixHeight").fixHeight();
 	}
 
-	function copyDate(dummyRowId, propName, idx) {
+	function copyDate(dummyRowId, propName, idx, delCallback) {
 		var newId = propName + idx;
 		var copyId = "li_" + newId;
 
@@ -885,9 +925,69 @@ function addDateItem(ulId, multiplicity, dummyRowId, propName, countId) {
 		$text.change(function() {dateChange(newId);});
 
 		//削除ボタンのclickを設定
-		$button.click(function() {deleteItem(copyId);});
+		$button.click(function() {deleteItem(copyId, delCallback);});
 
 		datepicker($text);
+
+		return $copy;
+	}
+}
+
+/**
+ * 参照画面 ユニーク項目追加
+ *
+ * @param ulId
+ * @param multiplicity
+ * @param dummyRowId
+ * @param propName
+ * @param countId
+ * @return
+ */
+function addUniqueRefItem(ulId, multiplicity, dummyRowId, propName, countId, func, delCallback) {
+	if (canAddItem(ulId, multiplicity)) {
+		countUp(countId, function(count) {
+			var $copy = copyUniqueRefItem(dummyRowId, propName, count, delCallback);
+			if (func && $.isFunction(func)) func.call(this, $copy);
+		});
+		$(".fixHeight").fixHeight();
+	}
+
+	function copyUniqueRefItem(dummyRowId, propName, idx, delCallback) {
+		var newId = propName + idx;
+		var copyId = "li_" + newId;
+
+		//ソースをコピー
+		var $src = $("#" + dummyRowId);
+		var $copy = clone($src, copyId);
+
+		//input
+		var $text = $(":text", $copy);
+		var $link = $("a.modal-lnk", $copy);
+		var $hidden = $(":hidden:last", $copy);
+		var $selBtn = $(":button.sel-btn", $copy);
+		var $delBtn = $(":button.del-btn", $copy);
+
+		//inputのidを設定
+		$text.attr("id", "uniq_txt_" + copyId);
+
+		if ($("body.modal-body").length != 0) {
+			$link.subModalWindow();
+		} else {
+			$link.modalWindow();
+		}
+
+		//hiddenにnameとidを指定
+		$hidden.attr({name: propName, id: "i_" + copyId});
+
+		//selectボタンにidを設定
+		$selBtn.attr("id", "sel_btn_" + newId);
+		//削除ボタンのclickを設定
+		$delBtn.click(function() {deleteItem(copyId, delCallback);});
+
+		$copy.css("display", "");
+		$copy.refUnique();
+
+		return $copy;
 	}
 }
 
@@ -922,7 +1022,7 @@ function validateDate(val, dateFormat, errMessage) {
 
 	function getErrorMessage() {
 		if (typeof errMessage === "undefined" || errMessage == null || errMessage == "") {
-			errMessage = scriptContext.locale.validateDateErrMsg;
+			errMessage = scriptContext.gem.locale.date.validateDateErrMsg;
 		}
 		return messageFormat(errMessage, dateFormat);
 	}
@@ -975,15 +1075,16 @@ function timeSelectToHidden($hour, $min, $sec, $hidden) {
  * @param countId
  * @return
  */
-function addTimeSelectItem(ulId, multiplicity, dummyRowId, propName, countId) {
+function addTimeSelectItem(ulId, multiplicity, dummyRowId, propName, countId, func, delCallback) {
 	if (canAddItem(ulId, multiplicity)) {
 		countUp(countId, function(count) {
-			copyTime(dummyRowId, propName, count);
+			var $copy = copyTime(dummyRowId, propName, count, delCallback);
+			if (func && $.isFunction(func)) func.call(this, $copy);
 		});
 		$(".fixHeight").fixHeight();
 	}
 
-	function copyTime(dummyRowId, propName, idx) {
+	function copyTime(dummyRowId, propName, idx, delCallback) {
 		var newId = propName + idx;
 		var copyId = "li_" + newId;
 
@@ -1018,7 +1119,9 @@ function addTimeSelectItem(ulId, multiplicity, dummyRowId, propName, countId) {
 		$hidden.attr({name: propName, id: "i_" + newId});
 
 		//削除ボタンのclickを設定
-		$button.click(function() {deleteItem(copyId);});
+		$button.click(function() {deleteItem(copyId, delCallback);});
+
+		return $copy;
 	}
 }
 
@@ -1064,16 +1167,17 @@ function timePickerToHidden($time, $hidden) {
  * @param countId
  * @return
  */
-function addTimePickerItem(ulId, multiplicity, dummyRowId, propName, countId) {
+function addTimePickerItem(ulId, multiplicity, dummyRowId, propName, countId, func, delCallback) {
 	if (canAddItem(ulId, multiplicity)) {
 		countUp(countId, function(count) {
-			copyTimePicker(dummyRowId, propName, count);
+			var $copy = copyTimePicker(dummyRowId, propName, count, delCallback);
+			if (func && $.isFunction(func)) func.call(this, $copy);
 		});
 		$(".fixHeight").fixHeight();
 	}
 
 	//function copyTimePicker(dummyRowId, propName, idx, timeformat, maxlength, stepmin) {
-	function copyTimePicker(dummyRowId, propName, idx) {
+	function copyTimePicker(dummyRowId, propName, idx, delCallback) {
 
 		var newId = propName + idx;
 		var copyId = "li_" + newId;
@@ -1095,9 +1199,11 @@ function addTimePickerItem(ulId, multiplicity, dummyRowId, propName, countId) {
 		$hidden.attr({name : propName,id : "i_" + newId});
 
 		//削除ボタンのclickを設定
-		$button.click(function() {deleteItem(copyId);});
+		$button.click(function() {deleteItem(copyId, delCallback);});
 
 		timepicker($text);
+
+		return $copy;
 	}
 }
 
@@ -1132,7 +1238,7 @@ function validateTimePicker(val, timeFormat, fixedMin, fixedSec, errMessage) {
 
 	function getErrorMessage() {
 		if (typeof errMessage === "undefined" || errMessage == null || errMessage == "") {
-			errMessage = scriptContext.locale.validateTimeErrMsg;
+			errMessage = scriptContext.gem.locale.date.validateTimeErrMsg;
 		}
 		return messageFormat(errMessage, timeFormat);
 	}
@@ -1198,15 +1304,16 @@ function timestampSelectToHidden($date, $hour, $min, $sec, $msec, $hidden) {
  * @param countId
  * @return
  */
-function addTimestampSelectItem(ulId, multiplicity, dummyRowId, propName, countId) {
+function addTimestampSelectItem(ulId, multiplicity, dummyRowId, propName, countId, func, delCallback) {
 	if (canAddItem(ulId, multiplicity)) {
 		countUp(countId, function(count) {
-			copyTimestamp(dummyRowId, propName, count);
+			var $copy = copyTimestamp(dummyRowId, propName, count, delCallback);
+			if (func && $.isFunction(func)) func.call(this, $copy);
 		});
 		$(".fixHeight").fixHeight();
 	}
 
-	function copyTimestamp(dummyRowId, propName, idx) {
+	function copyTimestamp(dummyRowId, propName, idx, delCallback) {
 		var newId = propName + idx;
 		var copyId = "li_" + newId;
 
@@ -1247,9 +1354,11 @@ function addTimestampSelectItem(ulId, multiplicity, dummyRowId, propName, countI
 		$hidden.attr({name : propName, id : "i_" + newId});
 
 		//削除ボタンのclickを設定
-		$button.click(function() {deleteItem(copyId);});
+		$button.click(function() {deleteItem(copyId, delCallback);});
 
 		$text.applyDatepicker();
+
+		return $copy;
 	}
 }
 
@@ -1296,15 +1405,16 @@ function timestampPickerToHidden($date, $hidden) {
  * @param countId
  * @return
  */
-function addTimestampPickerItem(ulId, multiplicity, dummyRowId, propName, countId) {
+function addTimestampPickerItem(ulId, multiplicity, dummyRowId, propName, countId, func, delCallback) {
 	if (canAddItem(ulId, multiplicity)) {
 		countUp(countId, function(count) {
-			copyTimestampPicker(dummyRowId, propName, count);
+			var $copy = copyTimestampPicker(dummyRowId, propName, count, delCallback);
+			if (func && $.isFunction(func)) func.call(this, $copy);
 		});
 		$(".fixHeight").fixHeight();
 	}
 
-	function copyTimestampPicker(dummyRowId, propName, idx) {
+	function copyTimestampPicker(dummyRowId, propName, idx, delCallback) {
 
 		var newId = propName + idx;
 		var copyId = "li_" + newId;
@@ -1326,9 +1436,11 @@ function addTimestampPickerItem(ulId, multiplicity, dummyRowId, propName, countI
 		$hidden.attr({name : propName, id : "i_" + newId});
 
 		//削除ボタンのclickを設定
-		$button.click(function() {deleteItem(copyId);});
+		$button.click(function() {deleteItem(copyId, delCallback);});
 
 		datetimepicker($text);
+
+		return $copy;
 	}
 }
 
@@ -1376,7 +1488,7 @@ function validateTimestampPicker(val, dateFormat, timeFormat, fixedMin, fixedSec
 
 	function getErrorMessage() {
 		if (typeof errMessage === "undefined" || errMessage == null || errMessage == "") {
-			errMessage = scriptContext.locale.validateTimestampErrMsg;
+			errMessage = scriptContext.gem.locale.date.validateTimestampErrMsg;
 		}
 		return messageFormat(errMessage, dateFormat + " " + timeFormat);
 	}
@@ -1515,7 +1627,7 @@ function uploadFile(file, token) {
 			if (data.result != null) {
 				var result = $(data.result).find("Result").text();
 				if (result == null || result == "") {
-					$span.text(scriptContext.locale.failedToFileUpload).show();
+					$span.text(scriptContext.gem.locale.binary.failedToFileUpload).show();
 				} else {
 					var error = $(data.result).find("error").text();
 					if (error == null || error == "") {
@@ -1533,7 +1645,7 @@ function uploadFile(file, token) {
 					}
 				}
 			} else {
-				$span.text(scriptContext.locale.failedToFileUpload).show();
+				$span.text(scriptContext.gem.locale.binary.failedToFileUpload).show();
 			}
 
 			//全て完了(成功or失敗)してから入力欄コントロール
@@ -1557,7 +1669,7 @@ function uploadFile(file, token) {
 		var uploaded = $("#ul_" + es(propName)).children("li").length;
 
 		if (fileCount + uploaded > max) {
-			alert(messageFormat(scriptContext.locale.filesLimitOver, max));
+			alert(messageFormat(scriptContext.gem.locale.binary.filesLimitOver, max));
 			return false;
 		}
 
@@ -1613,7 +1725,7 @@ function addBinaryGroup(propName, count, fileId, brName, brType, brLobId, displa
 		$li.addClass("noimage");
 	}
 
-	$("<a href='javascript:void(0)' class='binaryDelete del-btn'> " + scriptContext.locale.deleteLink + "</a>").appendTo($li).click(function() {
+	$("<a href='javascript:void(0)' class='binaryDelete del-btn'> " + scriptContext.gem.locale.binary.deleteLink + "</a>").appendTo($li).click(function() {
 		//liを削除
 		$li.remove();
 
@@ -1637,7 +1749,7 @@ function addBinaryGroup(propName, count, fileId, brName, brType, brLobId, displa
 			var width = $input.attr("data-binWidth") - 0;
 			var height = $input.attr("data-binHeight") - 0;
 			var $p = $("<p id='p_" + propName + count + "' class='mb0' />").appendTo($li);
-			var $img = $("<object data='" + ref + "' type='application/x-shockwave-flash' width='" + width + "' height='" + height + "' ><param name='movie' value='" + ref + "' /><param name='quality' value='high'>" + scriptContext.locale.notVewFlash + "</object>").appendTo($p);
+			var $img = $("<object data='" + ref + "' type='application/x-shockwave-flash' width='" + width + "' height='" + height + "' ><param name='movie' value='" + ref + "' /><param name='quality' value='high'>" + scriptContext.gem.locale.binary.notVewFlash + "</object>").appendTo($p);
 		} else if (brType && brType.indexOf("video/mpeg") > -1) {
 			// mpegファイルの場合は動画を表示
 			var width = $input.attr("data-binWidth") - 0;
@@ -1748,7 +1860,7 @@ function createAudioElement($parent, brType, id, src) {
 // 参照型用のJavascript
 ////////////////////////////////////////////////////////
 
-function showReference(viewAction, defName, oid, version, linkId, refEdit, editCallback) {
+function showReference(viewAction, defName, oid, version, linkId, refEdit, editCallback, parentDefName, parentViewName, parentPropName, viewType, refSectionIndex) {
 
 	var isSubModal = $("body.modal-body").length != 0;
 	var target = getModalTarget(isSubModal);
@@ -1760,8 +1872,9 @@ function showReference(viewAction, defName, oid, version, linkId, refEdit, editC
 		}
 
 		//リンク先でEntityの名前が変更されている可能性があるので値を反映
-		var _id = linkId.replace(/\[/g, "\\[").replace(/\]/g, "\\]").replace(/\./g, "\\.");
-		$("#" + _id).text(entity.name);
+//		var _id = linkId.replace(/\[/g, "\\[").replace(/\]/g, "\\]").replace(/\./g, "\\.");
+//		$("#" + _id).text(entity.name);
+		$("[data-linkId = '" + linkId + "']").text(entity.name);
 
 		//起動したtargetに対して再度詳細画面を表示しなおす(versionは戻ってきたentityから)
 		var $form = $("<form />").attr({method:"POST", action:viewAction + "/" + oid, target:target}).appendTo("body");
@@ -1780,6 +1893,14 @@ function showReference(viewAction, defName, oid, version, linkId, refEdit, editC
 //	$("<input />").attr({type:"hidden", name:"oid", value:oid}).appendTo($form);
 	$("<input />").attr({type:"hidden", name:"version", value:version}).appendTo($form);
 	$("<input />").attr({type:"hidden", name:"refEdit", value:refEdit}).appendTo($form);
+	if (refEdit && parentPropName) {
+		var _parentPropName = parentPropName.replace(/\[\w+\]/g, ""); //ネストテーブルプロパティ
+		if (parentDefName) $("<input />").attr({type:"hidden", name:"parentDefName", value:parentDefName}).appendTo($form);
+		if (parentViewName) $("<input />").attr({type:"hidden", name:"parentViewName", value:parentViewName}).appendTo($form);
+		if (_parentPropName) $("<input />").attr({type:"hidden", name:"parentPropName", value:_parentPropName}).appendTo($form);
+		if (viewType) $("<input />").attr({type:"hidden", name:"viewType", value:viewType}).appendTo($form);
+		if (refSectionIndex) $("<input />").attr({type:"hidden", name:"referenceSectionIndex", value:refSectionIndex}).appendTo($form);
+	}
 	if (isSubModal) $("<input />").attr({type:"hidden", name:"modalTarget", value:target}).appendTo($form);
 	$form.submit();
 	$form.remove();
@@ -1800,7 +1921,7 @@ function showReference(viewAction, defName, oid, version, linkId, refEdit, editC
  * @param button
  * @return
  */
-function searchReference(selectAction, viewAction, defName, propName, multiplicity, multi, urlParam, refEdit, callback, button, viewName, permitConditionSelectAll) {
+function searchReference(selectAction, viewAction, defName, propName, multiplicity, multi, urlParam, refEdit, callback, button, viewName, permitConditionSelectAll, parentDefName, parentViewName, viewType, refSectionIndex, delCallback) {
 	var _propName = propName.replace(/\[/g, "\\[").replace(/\]/g, "\\]").replace(/\./g, "\\.");
 	document.scriptContext["searchReferenceCallback"] = function(selectArray) {
 		var $ul = $("#ul_" + _propName);
@@ -1836,11 +1957,12 @@ function searchReference(selectAction, viewAction, defName, propName, multiplici
 			list.push(keySplit(key));
 		}
 		if (list.length > 0) {
-			getEntityNameList(defName, viewName, list, function(entities) {
+			var parentPropName = propName.replace(/^sc_/, "").replace(/\[\w+\]/g, "");
+			getEntityNameList(defName, viewName, parentDefName, parentViewName, parentPropName, viewType, refSectionIndex, list, function(entities) {
 				for (var i = 0; i < entities.length; i++) {
 					var entity = entities[i];
 					var _key = entity.oid + "_" + entity.version;
-					addReference("li_" + propName + _key, viewAction, defName, _key, entity.name, propName, "ul_" + _propName, refEdit);
+					addReference("li_" + propName + _key, viewAction, defName, _key, entity.name, propName, "ul_" + _propName, refEdit, delCallback, parentDefName, parentViewName, viewType);
 				}
 				entityList = entities;
 			});
@@ -1903,9 +2025,10 @@ function searchReference(selectAction, viewAction, defName, propName, multiplici
  * @param refEdit
  * @param callback
  * @param button
+ * @param displayPropName 表示ラベルプロパティ
  * @return
  */
-function searchReferenceForBi(webapi, selectAction, viewAction, defName, entityDefName, propName, multiplicity, multi, urlParam, refEdit, callback, button) {
+function searchReferenceForBi(webapi, selectAction, viewAction, defName, entityDefName, propName, multiplicity, multi, urlParam, refEdit, callback, button, displayPropName) {
 	var _propName = propName.replace(/\[/g, "\\[").replace(/\]/g, "\\]").replace(/\./g, "\\.");
 	document.scriptContext["searchReferenceCallback"] = function(selectArray) {
 		var $ul = $("#ul_" + _propName);
@@ -1940,11 +2063,13 @@ function searchReferenceForBi(webapi, selectAction, viewAction, defName, entityD
 			list.push(keySplit(key));
 		}
 		if (list.length > 0) {
-			getEntityValueList(webapi, defName, entityDefName, "name", list, function(entities) {
+			var _displayPropName = displayPropName;
+			if (typeof _displayPropName === "undefined" || _displayPropName == null || _displayPropName == "") _displayPropName = "name";
+			getEntityValueList(webapi, defName, entityDefName, _displayPropName, list, function(entities) {
 				for (var i = 0; i < entities.length; i++) {
 					var entity = entities[i];
 					var _key = entity.oid + "_" + entity.version;
-					addReference("li_" + propName + _key, viewAction, entityDefName, _key, entity.name, propName, "ul_" + _propName, refEdit);
+					addReference("li_" + propName + _key, viewAction, entityDefName, _key, entity[_displayPropName], propName, "ul_" + _propName, refEdit);
 				}
 				entityList = entities;
 			});
@@ -2073,6 +2198,83 @@ function searchReferenceFromView(selectAction, updateAction, defName, id, propNa
 	$form.remove();
 }
 
+function searchUniqueReference(id, selectAction, viewAction, defName, propName, urlParam, refEdit, callback, button, viewName, permitConditionSelectAll, parentDefName, parentViewName, viewType, refSectionIndex) {
+	var _id = id.replace(/\[/g, "\\[").replace(/\]/g, "\\]").replace(/\./g, "\\.");
+	var _propName = propName.replace(/\[/g, "\\[").replace(/\]/g, "\\]").replace(/\./g, "\\.");
+	document.scriptContext["searchReferenceCallback"] = function(selectArray) {
+		var $ul = $("#ul_" + _propName);
+		var refs = new Array();
+		$ul.children("li").children(":hidden").each(function() {
+			refs[$(this).val()] = this.parentNode;
+		});
+
+		var key = selectArray[0];
+		// 重複チェック （自分を除く）
+		if (key in refs && !$(refs[key]).is("#" + _id)) {
+			alert(scriptContext.gem.locale.reference.duplicateData);
+			return;
+		}
+
+		var list = new Array();
+		list.push(keySplit(key));
+
+		//参照の名前を一括取得
+		var entityList = new Array();
+		var parentPropName = propName.replace(/^sc_/, "").replace(/\[\w+\]/g, "");
+		getEntityNameList(defName, viewName, parentDefName, parentViewName, parentPropName, viewType, refSectionIndex, list, function(entities) {
+			for (var i = 0; i < entities.length; i++) {
+				var entity = entities[i];
+				var _key = entity.oid + "_" + entity.version;
+				var uniqueValue = entity.uniqueValue;
+				updateUniqueReference(_id, viewAction, defName, _key, entity.name, propName, "ul_" + _propName, refEdit, "uniq_txt_" + _id , uniqueValue, parentDefName, parentViewName, viewType, refSectionIndex);
+			}
+			entityList = entities;
+		});
+
+		if (callback && $.isFunction(callback)) {
+			if (typeof button === "undefined" || button == null) {
+				callback.call(this, entityList, null, propName);
+			} else {
+				//引数で渡されたトリガーとなるボタンをthisとして渡す
+				callback.call(button, entityList, null, propName);
+			}
+		}
+
+		if (entityList.length > 0) {
+			$("[name='" + _propName + "']:eq(0)", $("#" + _id)).trigger("change", {});
+		}
+		closeModalDialog();
+	};
+
+	var selType = "single";
+	var multiplicity = 1;
+	var isSubModal = $("body.modal-body").length != 0;
+	var target = getModalTarget(isSubModal);
+	var $form = $("<form />").attr({method:"POST", action:selectAction, target:target}).appendTo("body");
+	$("<input />").attr({type:"hidden", name:"defName", value:defName}).appendTo($form);//定義名
+	$("<input />").attr({type:"hidden", name:"multiplicity", value:multiplicity}).appendTo($form);//選択可能数
+	$("<input />").attr({type:"hidden", name:"selectType", value:selType}).appendTo($form);//単一or複数
+	$("<input />").attr({type:"hidden", name:"propName", value:propName}).appendTo($form);//プロパティ名
+	$("<input />").attr({type:"hidden", name:"rootName", value:id}).appendTo($form);
+	$("<input />").attr({type:"hidden", name:"permitConditionSelectAll", value:permitConditionSelectAll}).appendTo($form);
+	if (isSubModal) $("<input />").attr({type:"hidden", name:"modalTarget", value:target}).appendTo($form);
+	var kv = urlParam.split("&");
+	if (urlParam.length > 0 && kv.length > 0) {
+		for (var i = 0; i < kv.length; i++) {
+			var _kv = kv[i].split("=");
+			if (_kv.length > 0) {
+				$("<input />").attr({type:"hidden", name:_kv[0], value:_kv[1]}).appendTo($form);
+			}
+		}
+	}
+	var specVersionKey = $(button).attr("data-specVersionKey");
+	if (specVersionKey && specVersionKey != null) {
+		$("<input />").attr({type:"hidden", name:"specVersion", value:$("[name='" + es(specVersionKey) + "']").val()}).appendTo($form);
+	}
+	$form.submit();
+	$form.remove();
+}
+
 /**
  * 参照型の追加
  * @param defName
@@ -2081,7 +2283,7 @@ function searchReferenceFromView(selectAction, updateAction, defName, id, propNa
  * @param multiplicity
  * @return
  */
-function insertReference(addAction, viewAction, defName, propName, multiplicity, urlParam, parentOid, parentVersion, parentDefName, refEdit, callback, button) {
+function insertReference(addAction, viewAction, defName, propName, multiplicity, urlParam, parentOid, parentVersion, parentDefName, parentViewName, refEdit, callback, button, delCallback, viewType, refSectionIndex) {
 	var isSubModal = $("body.modal-body").length != 0;
 	var target = getModalTarget(isSubModal);
 
@@ -2092,7 +2294,7 @@ function insertReference(addAction, viewAction, defName, propName, multiplicity,
 		document.scriptContext["editReferenceCallback"] = function(entity) {
 			var $ul = $("#ul_" + _propName);
 			var key = entity.oid + "_" + entity.version;
-			var linkId = addReference("li_" + propName + key, viewAction, defName, key, entity.name, propName, "ul_" + _propName, refEdit);
+			var linkId = addReference("li_" + propName + key, viewAction, defName, key, entity.name, propName, "ul_" + _propName, refEdit, delCallback, parentDefName, parentViewName, viewType);
 
 			//カスタムのCallbackが定義されている場合に呼び出す
 			if (callback && $.isFunction(callback)) {
@@ -2107,14 +2309,19 @@ function insertReference(addAction, viewAction, defName, propName, multiplicity,
 			$("[name='" + _propName + "']:eq(0)").trigger("change", {});
 
 			//起動したtargetに対して再度詳細画面を表示しなおす
-			showReference(viewAction, defName, entity.oid, entity.version, linkId, refEdit);
+			showReference(viewAction, defName, entity.oid, entity.version, linkId, refEdit, null, parentDefName, parentViewName, propName, viewType, refSectionIndex);
 		};
 
+		var parentPropName = propName.replace(/\[\w+\]/g, "");
 		var $form = $("<form />").attr({method:"POST", action:addAction, target:target}).appendTo("body");
 //		$("<input />").attr({type:"hidden", name:"defName", value:defName}).appendTo($form);//定義名
 		$("<input />").attr({type:"hidden", name:"parentOid", value:parentOid}).appendTo($form);//参照元の情報
 		$("<input />").attr({type:"hidden", name:"parentVersion", value:parentVersion}).appendTo($form);
 		$("<input />").attr({type:"hidden", name:"parentDefName", value:parentDefName}).appendTo($form);
+		$("<input />").attr({type:"hidden", name:"parentViewName", value:parentViewName}).appendTo($form);
+		$("<input />").attr({type:"hidden", name:"parentPropName", value:parentPropName}).appendTo($form);
+		$("<input />").attr({type:"hidden", name:"viewType", value:viewType}).appendTo($form);
+		if (refSectionIndex) $("<input />").attr({type:"hidden", name:"referenceSectionIndex", value:refSectionIndex}).appendTo($form);
 		if (isSubModal) $("<input />").attr({type:"hidden", name:"modalTarget", value:target}).appendTo($form);
 		var kv = urlParam.split("&");
 		if (urlParam.length > 0 && kv.length > 0) {
@@ -2200,7 +2407,64 @@ function insertReferenceFromView(addAction, defName, id, multiplicity, urlParam,
 	}
 }
 
-function addReference(id, viewAction, defName, key, label, propName, ulId, refEdit) {
+function insertUniqueReference(id, addAction, viewAction, defName, propName, multiplicity, urlParam, parentDefName, parentViewName, refEdit, callback, button, viewType, refSectionIndex) {
+	var isSubModal = $("body.modal-body").length != 0;
+	var target = getModalTarget(isSubModal);
+
+	var parentOid = $(button).attr("data-parentOid");
+	var parentVersion = $(button).attr("data-parentVersion");
+
+	var _id = id.replace(/\[/g, "\\[").replace(/\]/g, "\\]").replace(/\./g, "\\.");
+	var _propName = propName.replace(/\[/g, "\\[").replace(/\]/g, "\\]").replace(/\./g, "\\.");
+
+	//追加(＝編集)ダイアログで保存された場合は、ダイアログを閉じる
+	document.scriptContext["editReferenceCallback"] = function(entity) {
+		var $ul = $("#ul_" + _propName);
+		var key = entity.oid + "_" + entity.version;
+		var uniqueValue = entity.uniqueValue;
+		updateUniqueReference(_id, viewAction, defName, key, entity.name, propName, "ul_" + _propName, refEdit, "uniq_txt_" + _id , uniqueValue, parentDefName, parentViewName, viewType, refSectionIndex);
+
+		//カスタムのCallbackが定義されている場合に呼び出す
+		if (callback && $.isFunction(callback)) {
+			if (typeof button === "undefined" || button == null) {
+				callback.call(this, entity, propName);
+			} else {
+				//引数で渡されたトリガーとなるボタンをthisとして渡す
+				callback.call(button, entity, propName);
+			}
+		}
+
+		$("[name='" + _propName + "']:eq(0)", $("#" + _id)).trigger("change", {});
+
+		//起動したtargetに対して再度詳細画面を表示しなおす
+		showReference(viewAction, defName, entity.oid, entity.version, id, refEdit, null, parentDefName, parentViewName, propName, viewType, refSectionIndex);
+	};
+
+	var parentPropName = propName.replace(/\[\w+\]/g, "");
+	var $form = $("<form />").attr({method:"POST", action:addAction, target:target}).appendTo("body");
+//		$("<input />").attr({type:"hidden", name:"defName", value:defName}).appendTo($form);//定義名
+	$("<input />").attr({type:"hidden", name:"parentOid", value:parentOid}).appendTo($form);//参照元の情報
+	$("<input />").attr({type:"hidden", name:"parentVersion", value:parentVersion}).appendTo($form);
+	$("<input />").attr({type:"hidden", name:"parentDefName", value:parentDefName}).appendTo($form);
+	$("<input />").attr({type:"hidden", name:"parentViewName", value:parentViewName}).appendTo($form);
+	$("<input />").attr({type:"hidden", name:"parentPropName", value:parentPropName}).appendTo($form);
+	$("<input />").attr({type:"hidden", name:"viewType", value:viewType}).appendTo($form);
+	if (refSectionIndex) $("<input />").attr({type:"hidden", name:"referenceSectionIndex", value:refSectionIndex}).appendTo($form);
+	if (isSubModal) $("<input />").attr({type:"hidden", name:"modalTarget", value:target}).appendTo($form);
+	var kv = urlParam.split("&");
+	if (urlParam.length > 0 && kv.length > 0) {
+		for (var i = 0; i < kv.length; i++) {
+			var _kv = kv[i].split("=");
+			if (_kv.length > 0) {
+				$("<input />").attr({type:"hidden", name:_kv[0], value:_kv[1]}).appendTo($form);
+			}
+		}
+	}
+	$form.submit();
+	$form.remove();
+}
+
+function addReference(id, viewAction, defName, key, label, propName, ulId, refEdit, delCallback, parentDefName, parentViewName, viewType, refSectionIndex) {
 	var tmp = keySplit(key);
 	var oid = tmp.oid;
 	var ver = tmp.version;
@@ -2211,8 +2475,8 @@ function addReference(id, viewAction, defName, key, label, propName, ulId, refEd
 
 	//リンク追加
 	var linkId = propName + "_" + tmp.oid;
-	var $link = $("<a href='javascript:void(0)' />").attr("id", linkId).click(function() {
-		showReference(viewAction, defName, oid, ver, linkId, refEdit);
+	var $link = $("<a href='javascript:void(0)' />").attr({"id":linkId, "data-linkId":linkId}).click(function() {
+		showReference(viewAction, defName, oid, ver, linkId, refEdit, null, parentDefName, parentViewName, propName, viewType, refSectionIndex);
 	}).appendTo($li);
 	$link.text(label);
 	if ($("body.modal-body").length != 0) {
@@ -2224,9 +2488,10 @@ function addReference(id, viewAction, defName, key, label, propName, ulId, refEd
 	//削除ボタン追加
 	var deletable = $ul.attr("data-deletable");
 	if (deletable != null && deletable == "true") {
-		var $btn = $(" <input type='button' />").val(scriptContext.locale.deleteBtn).addClass("gr-btn-02 del-btn ml05").appendTo($li);
+		var $btn = $(" <input type='button' />").val(scriptContext.gem.locale.reference.deleteBtn).addClass("gr-btn-02 del-btn ml05").appendTo($li);
 		$btn.click(function() {
 			$(this).parent().remove();
+			if (delCallback && $.isFunction(delCallback)) delCallback.call(this, $(this).parent().attr("id"));
 		});
 	}
 
@@ -2234,6 +2499,67 @@ function addReference(id, viewAction, defName, key, label, propName, ulId, refEd
 	$("<input type='hidden' />").attr({name:propName, value:key}).appendTo($li);
 
 	$ul.append($li);
+
+	$(".fixHeight").fixHeight();
+
+	//リンクIDを返す
+	return linkId;
+}
+
+function addUniqueReference(viewAction, key, label, unique, defName, propName, multiplicity, ulId, dummyRowId, refEdit, countId, delCallback, parentDefName, parentViewName, viewType, refSectionIndex) {
+	var tmp = keySplit(key);
+	var oid = tmp.oid;
+	var ver = tmp.version;
+
+	var $copy = addUniqueRefItem(ulId, multiplicity, dummyRowId, propName, countId, function ($copy) {
+
+		var $copyId = $copy.attr("id");
+		var $text = $(":text", $copy);
+		var $link = $("a.modal-lnk", $copy);
+		var $hidden = $("input:hidden:last", $copy);
+
+		//inputを設定
+		$text.val(unique);
+
+		//linkを設定
+		var linkId = propName + "_" + tmp.oid;
+		$link.attr({"id":linkId, "data-linkId":linkId}).click(function() {
+			showReference(viewAction, defName, oid, ver, linkId, refEdit, delCallback, parentDefName, parentViewName, propName, viewType, refSectionIndex);
+		});
+		$link.text(label);
+
+		//hiddenを設定
+		$hidden.val(key);
+
+		return $copyId;
+
+	}, delCallback);
+}
+
+function updateUniqueReference(id, viewAction, defName, key, label, propName, ulId, refEdit, txtId, uniqueValue, parentDefName, parentViewName, viewType, refSectionIndex) {
+	var tmp = keySplit(key);
+	var oid = tmp.oid;
+	var ver = tmp.version;
+
+	var $ul = $("#" + ulId);
+	var $li = $("#" + id);
+	var $txt = $("#" + txtId)
+
+	var linkId = propName + "_" + tmp.oid;
+	var $link = $("a", $li).attr({"id":linkId, "data-linkId":linkId}).removeAttr("onclick").off("click");
+	$link.click(function() {
+		showReference(viewAction, defName, oid, ver, linkId, refEdit, null, parentDefName, parentViewName, propName, viewType, refSectionIndex);
+	});
+
+	$link.text(label);
+	if ($("body.modal-body").length != 0) {
+		$link.subModalWindow();
+	} else {
+		$link.modalWindow();
+	}
+
+	$txt.val(uniqueValue);
+	$(":hidden[name = '" + propName + "']", $li).val(key);
 
 	$(".fixHeight").fixHeight();
 
@@ -2417,7 +2743,11 @@ function editReference(detailAction, defName, oid, trId, propName, index, viewAc
 					$link.on("click", function() {
 						editReference(detailAction, defName, entity.oid, trId, propName, index, viewAction, rootDefName, viewName, orgPropName);
 					});
-					$link.modalWindow();
+					if ($("body.modal-body").length != 0) {
+						$link.subModalWindow();
+					} else {
+						$link.modalWindow();
+					}
 				}
 			});
 
@@ -2512,25 +2842,28 @@ function insertComma(str, separator) {
 
 function updateNestValue_Date(type, $node, parentPropName, name, entity) {
 	var val = entity[name];
-	var date = "";
-	var label = "";
+	var _date = null;
 	if (val != null) {
-		date = dateUtil.newFormatString(val, "YYYY-MM-DD", "YYYYMMDD");
-		label = dateUtil.newFormatString(val, "YYYY-MM-DD", dateUtil.getOutputDateFormat());
+		_date = dateUtil.toDate(val, "YYYY-MM-DD");
 	}
 	if (type == "DATETIME") {
-		$("#d_" + es(parentPropName + "." + name), $node).val(convertToLocaleDateString(date));
-		$("#i_" + es(parentPropName + "." + name), $node).val();
+		var value = _date != null ? dateUtil.format(_date, dateUtil.getInputDateFormat()) : "";
+		$("#d_" + es(parentPropName + "." + name), $node).val(value);
+		var hidden = _date != null ? dateUtil.format(_date, dateUtil.getServerDateFormat()) : "";
+		$("#i_" + es(parentPropName + "." + name), $node).val(hidden);
 	} else if (type == "LABEL") {
-		$node.text(label);
-		$("<input />").attr({type:"hidden", name:parentPropName + "." + name, value:date}).appendTo($node);
+		var $span = $node.children("span.data-label");
+		var showWeekday = $span.attr("data-show-weekday") == "true";
+		var label = _date != null ? dateUtil.formatOutputDate(_date, showWeekday) : "";
+		$span.text(label);
+		var hidden = _date != null ? dateUtil.format(_date, dateUtil.getServerDateFormat()) : "";
+		$("<input />").attr({type:"hidden", name:parentPropName + "." + name, value:hidden}).appendTo($span);
 	}
 }
 function updateNestValue_Time(type, $node, parentPropName, name, entity) {
 	var val = entity[name];
 	var _date = null;
-	if (val == null) val = "";
-	else {
+	if (val != null) {
 		_date = dateUtil.toDate(val, dateUtil.getOutputTimeFormat());
 	}
 
@@ -2580,17 +2913,18 @@ function updateNestValue_Time(type, $node, parentPropName, name, entity) {
 			$node.children("span").children("input:hidden:last").val(hidden);
 		}
 	} else if (type == "LABEL") {
-		var label = _date != null ? dateUtil.format(_date, dateUtil.getOutputTimeFormat()): "";
-		$node.text(label);
+		var $span = $node.children("span.data-label");
+		var range = $span.attr("data-time-range");
+		var label = _date != null ? dateUtil.formatOutputTime(_date, range): "";
+		$span.text(label);
 		var hidden = _date != null ? dateUtil.format(_date, dateUtil.getServerTimeFormat()) : "";
-		$("<input />").attr({type:"hidden", name:parentPropName + "." + name, value:hidden}).appendTo($node);
+		$("<input />").attr({type:"hidden", name:parentPropName + "." + name, value:hidden}).appendTo($span);
 	}
 }
 function updateNestValue_Timestamp(type, $node, parentPropName, name, entity) {
 	var val = entity[name];
 	var _date = null;
-	if (val == null) val = "";
-	else {
+	if (val != null) {
 		_date = new Date();
 		_date.setTime(val);
 	}
@@ -2650,15 +2984,17 @@ function updateNestValue_Timestamp(type, $node, parentPropName, name, entity) {
 			$node.children("span").children("input:hidden:last").val(hidden);
 		}
 	} else if (type == "LABEL") {
-		var label = _date != null ? dateUtil.format(_date, dateUtil.getOutputDatetimeFormat()): "";
-		$node.text(label);
+		var $span = $node.children("span.data-label");
+		var range = $span.attr("data-time-range");
+		var showWeekday = $span.attr("data-show-weekday") == "true";
+		var label = _date != null ? dateUtil.formatOutputDatetime(_date, range, showWeekday) : "";
+		$span.text(label);
 		var hidden = _date != null ? dateUtil.format(_date, dateUtil.getServerDatetimeFormat()) : "";
-		$("<input />").attr({type:"hidden", name:parentPropName + "." + name, value:hidden}).appendTo($node);
+		$("<input />").attr({type:"hidden", name:parentPropName + "." + name, value:hidden}).appendTo($span);
 	}
 }
 function updateNestValue_Boolean(type, $node, parentPropName, name, entity) {
 	var val = entity[name];
-	var displayName = "";
 	var selectValue = "";
 	if (val != null) {
 		selectValue = val;
@@ -2667,14 +3003,13 @@ function updateNestValue_Boolean(type, $node, parentPropName, name, entity) {
 //		$node.children("ul").children("li").children("label").children(":radio").val([selectValue]);
 		$(":radio", $node).val([selectValue]);
 	} else if (type == "CHECKBOX") {
-		var checked = selectValue == true ? true : false;
+		var checked = selectValue === true ? true : false;
 		$(":checkbox", $node).prop("checked", checked);
 	} else if (type == "LABEL") {
-		var $ul = $node.children("ul");
-		$ul.children("li").remove();
-		var $li = $("<li />").appendTo($ul);
-		$li.text(displayName);
-		$("<input />").attr({type:"hidden", name:parentPropName + "." + name, value:selectValue}).appendTo($li);
+		var $span = $node.children("span.data-label");
+		var label = selectValue === "" ? "" : selectValue === true ? $span.attr("data-true-label") : $span.attr("data-false-label");
+		$span.text(label);
+		$("<input />").attr({type:"hidden", name:parentPropName + "." + name, value:selectValue}).appendTo($span);
 	}
 }
 function updateNestValue_Select(type, $node, parentPropName, name, entity) {
@@ -2723,14 +3058,17 @@ function updateNestValue_Reference(type, $node, parentPropName, name, entity) {
 		var $button = $node.children(":button");
 		$node.children("ul").children("li").remove();
 		if (val != null) {
-			var viewAction = $button.attr("viewAction");
-			var propName = $button.attr("propName");
+			var viewAction = $button.attr("data-viewAction");
+			var propName = $button.attr("data-propName");
 			var _propName = propName.replace(/\[/g, "\\[").replace(/\]/g, "\\]").replace(/\./g, "\\.");
-			var defName = $button.attr("defName");
-			var refEdit = $button.attr("refEdit");
+			var defName = $button.attr("data-defName");
+			var refEdit = $button.attr("data-refEdit");
+			var parentDefName = $button.attr("data-parentDefName");
+			var parentViewName = $button.attr("data-parentViewName");
+			var viewType = $button.attr("data-viewType");
 			var key = val.oid + "_" + val.version;
 			var label = val.name;
-			addReference("li_" + propName, viewAction, defName, key, label, propName, "ul_" + _propName, refEdit);
+			addReference("li_" + propName, viewAction, defName, key, label, propName, "ul_" + _propName, refEdit, null, parentDefName, parentViewName, viewType);
 		}
 	} else if (type == "SELECT") {
 		var oid = "";
@@ -2846,7 +3184,7 @@ function updateNestValue_DateRange(head, $node, parentPropName, name, entity) {
  * @param multiplicy
  * @return
  */
-function addNestRow(rowId, countId, multiplicy, insertTop, rootDefName, viewName, orgPropName, callback) {
+function addNestRow(rowId, countId, multiplicy, insertTop, rootDefName, viewName, orgPropName, callback, delCallback) {
 	var $srcRow = $("#" + rowId);
 	$srcRow.parents("table").show();
 	var $tbody = $srcRow.parent();
@@ -2855,8 +3193,9 @@ function addNestRow(rowId, countId, multiplicy, insertTop, rootDefName, viewName
 
 	var $copyRow = $srcRow.clone().removeAttr("style");
 	var $headerRow = $tbody.prev("thead").children("tr:first");
-	if (insertTop && rowCount.length > 1) {
-		$headerRow.after($copyRow);
+	if (insertTop && rowCount > 1) {
+		var $firstRow = $tbody.children("tr:not(:hidden):first");
+		$copyRow.insertBefore($firstRow);
 	} else {
 		$tbody.append($copyRow);
 	}
@@ -2868,6 +3207,12 @@ function addNestRow(rowId, countId, multiplicy, insertTop, rootDefName, viewName
 		});
 		$("[name]", $copyRow).each(function() {
 			replaceDummyAttr(this, "name", idx);
+		});
+		$("[data-name]", $copyRow).each(function() {
+			replaceDummyAttr(this, "data-name", idx);
+		});
+		$("[data-propName]", $copyRow).each(function() {
+			replaceDummyAttr(this, "data-propName", idx);
 		});
 		$copyRow.addClass("stripeRow");
 
@@ -2893,7 +3238,7 @@ function addNestRow(rowId, countId, multiplicy, insertTop, rootDefName, viewName
 			} else if (type[0] == "Binary") {
 				//バイナリ
 				$td.children(":file").each(function() {
-					replaceDummyAttr(this, "pname", idx);
+					replaceDummyAttr(this, "data-pname", idx);
 					var token = $(this).attr("token");
 					uploadFile(this, token);
 				});
@@ -2916,20 +3261,29 @@ function addNestRow(rowId, countId, multiplicy, insertTop, rootDefName, viewName
 				$link.click(function() {
 					editReference(action, defName, "", rowId, propName, idx, view, rootDefName, viewName, orgPropName);
 				});
-				$link.modalWindow();
+				if ($("body.modal-body").length != 0) {
+					$link.subModalWindow();
+				} else {
+					$link.modalWindow();
+				}
 			} else if (type[0] == "tableOrder") {
 				//表示順
 				$(".up-icon", $td).on("click", function(){shiftUp(rowId)});
 				$(".down-icon", $td).on("click", function(){shiftDown(rowId)});
 			} else if (type[0] == "last") {
 				//削除ボタン
-				$($td).children(":button").on("click", function() {deleteRefTableRow(rowId);});
+				$($td).children(":button").on("click", function() {deleteRefTableRow(rowId, delCallback);});
 			}
 		});
+		
+		//追加された行のラジオボタン開閉制御
+		$("input.radio-togglable", $copyRow).togglableRadio();
 
 		if (callback && $.isFunction(callback)) callback.call(this, $copyRow.get(0), idx);
 	});
 	$(".fixHeight").fixHeight();
+
+	return $copyRow;
 }
 
 /**
@@ -2967,13 +3321,14 @@ function addNestRow_Number(type, cell, idx) {
  * @return
  */
 function addNestRow_Date(type, cell, idx) {
-
-	var id = $(cell).children("input:hidden:last").attr("id").substring(2);
-	$(cell).children(":text:first").each(function() {
-		this.removeAttribute("onchange");
-		$(this).change(function() {dateChange(id);});
-		datepicker(this);
-	});
+	if (type == "DATETIME") {
+		var id = $(cell).children("input:hidden:last").attr("id").substring(2);
+		$(cell).children(":text:first").each(function() {
+			this.removeAttribute("onchange");
+			$(this).change(function() {dateChange(id);});
+			datepicker(this);
+		});
+	}
 }
 
 /**
@@ -3085,7 +3440,11 @@ function addNestRow_Reference(type, cell, idx) {
 			var viewName = $selButton.attr("data-viewName");
 			var permitConditionSelectAll = $selButton.attr("data-permitConditionSelectAll");
 			var callback = scriptContext[callbackKey];
-			searchReference(selectAction, viewAction, defName, propName, multiplicity, false, urlParam, refEdit, callback, $selButton, viewName, permitConditionSelectAll);
+			var parentDefName = $selButton.attr("data-parentDefName");
+			var parentViewName = $selButton.attr("data-parentViewName");
+			var viewType = $selButton.attr("data-viewType");
+			var refSectionIndex = $selButton.attr("data-refSectionIndex");
+			searchReference(selectAction, viewAction, defName, propName, multiplicity, false, urlParam, refEdit, callback, $selButton, viewName, permitConditionSelectAll, parentDefName, parentViewName, viewType, refSectionIndex);
 		});
 
 		$insButton.on("click", function() {
@@ -3098,10 +3457,13 @@ function addNestRow_Reference(type, cell, idx) {
 			var parentOid = $insButton.attr("data-parentOid");
 			var parentVersion = $insButton.attr("data-parentVersion");
 			var parentDefName = $insButton.attr("data-parentDefName");
+			var parentViewName = $insButton.attr("data-parentViewName");
+			var viewType = $insButton.attr("data-viewType");
+			var refSectionIndex = $selButton.attr("data-refSectionIndex");
 			var refEdit = $insButton.attr("data-refEdit");
 			var callbackKey = $insButton.attr("data-callbackKey");
-			var callback = scriptContext[callbackKey]
-			insertReference(addAction, viewAction, defName, propName, multiplicity, urlParam, parentOid, parentVersion, parentDefName, refEdit, callback, $insButton);
+			var callback = scriptContext[callbackKey];
+			insertReference(addAction, viewAction, defName, propName, multiplicity, urlParam, parentOid, parentVersion, parentDefName, parentViewName, refEdit, callback, $insButton, null, viewType, refSectionIndex);
 		});
 	} else if (type == "TREE") {
 		var $selBtn = $(".sel-btn", $(cell));
@@ -3127,11 +3489,18 @@ function addNestRow_Reference(type, cell, idx) {
 			var parentOid = $insButton.attr("data-parentOid");
 			var parentVersion = $insButton.attr("data-parentVersion");
 			var parentDefName = $insButton.attr("data-parentDefName");
+			var parentViewName = $insButton.attr("data-parentViewName");
+			var viewType = $insButton.attr("data-viewType");
+			var refSectionIndex = $selButton.attr("data-refSectionIndex");
 			var refEdit = $insButton.attr("data-refEdit");
 			var callbackKey = $insButton.attr("data-callbackKey");
-			var callback = scriptContext[callbackKey]
-			insertReference(addAction, viewAction, defName, propName, multiplicity, urlParam, parentOid, parentVersion, parentDefName, refEdit, callback, $insButton);
+			var callback = scriptContext[callbackKey];
+			insertReference(addAction, viewAction, defName, propName, multiplicity, urlParam, parentOid, parentVersion, parentDefName, parentViewName, refEdit, callback, $insButton, null, viewType, refSectionIndex);
 		});
+	} else if (type == "UNIQUE") {
+		var $li = $(".unique-list", $(cell));
+		replaceDummyAttr($li, "data-propName", idx);
+		$(".refUnique", $(cell)).refUnique();
 	} else if (type == "REFCOMBO") {
 		//TODO 連動コンボ時の初期ロードで実行されるjavascriptをどうにかする
 		$(cell).children("select").each(function() {
@@ -3321,12 +3690,13 @@ function shiftOrder(webapi, rowId, orderPropName, key, refDefName, shiftUp, relo
 	});
 }
 
-function deleteRefTableRow(id) {
+function deleteRefTableRow(id, delCallback) {
 	var $tbody = $("#" + id).parent();
 	deleteItem(id);
 	if ($("tr:not(:hidden)", $tbody).length == 0) {
 		$tbody.parent("table").hide();
 	};
+	if (delCallback && $.isFunction(delCallback)) delCallback.call(this, id);
 }
 
 /**
@@ -3563,18 +3933,7 @@ var DateUtil = function(option) {
 	this._tokenMap.set("mm", {type: "min", moment: "mm", datepicker: "mm"});
 	this._tokenMap.set("ss", {type: "sec", moment: "ss", datepicker: "si"});
 	this._tokenMap.set("SSS", {type: "msec", moment: "SSS", datepicker: "|"});
-
-	this._dateDelimiter = option.dateDelimiter ? option.dateDelimiter : "/";
-	this._timeDelimiter = option.timeDelimiter ? option.timeDelimiter : ":";
-
-	this._serverDateTokens = null;
-	this._serverTimeTokens = null;
-
-	this._outputDateTokens = null;
-	this._outputTimeTokens = null;
-
-	this._inputDateTokens = null;
-	this._inputTimeTokens = null;
+	this._tokenMap.set("EEEE", {type: "weekday", moment: "dddd", datepicker: "|"});
 
 	this.server = {
 		dateFormat: null,
@@ -3587,15 +3946,23 @@ var DateUtil = function(option) {
 	}
 	this.output = {
 		dateFormat: null,
+		dateWeekdayFormat: null,
 		timeSecFormat: null,
 		timeMinFormat: null,
 		timeHourFormat: null,
 		getDateFormat: function() { return ""; },
+		getDateWeekdayFormat: function() { return ""; },
 		getTimeFormat: function(range) { return ""; },
 		getDatetimeFormat: function(range) {
 			return this.getDateFormat() + " " + this.getTimeFormat(range);
 		},
-		getWeekdayFormat: function() { return "dddd"; }
+		getDatetimeWeekdayFormat: function(range) {
+			return this.getDateWeekdayFormat() + " " + this.getTimeFormat(range);
+		},
+		getWeekdayFormat: function() {
+			var token = getFormatToken("weekday");
+			return token.moment;
+		}
 	};
 	this.input = {
 		dateFormat: null,
@@ -3622,22 +3989,17 @@ var DateUtil = function(option) {
 	//サーバ送信用フォーマット
 	if (option.server) {
 		if (option.server.dateFormat) {
-			var serverDateDelimiter = option.server.dateFormat.indexOf(util._dateDelimiter) > -1 ? util._dateDelimiter : "";
-			this._serverDateTokens = getTokens(option.server.dateFormat, this._tokenMap);
 			this.server.getDateFormat = function() {
 				if (!this.dateFormat) {
-					this.dateFormat = createDateFormat(util._serverDateTokens, "moment", serverDateDelimiter);
+					this.dateFormat = convertFormat(util._option.server.dateFormat, "moment");
 				}
 				return this.dateFormat;
 			}
 		}
 		if (option.server.timeFormat) {
-			var serverTimeDelimiter = option.server.timeFormat.indexOf(util._timeDelimiter) > -1 ? util._timeDelimiter : "";
-			this._serverTimeTokens = getTokens(option.server.timeFormat, this._tokenMap);
 			this.server.getTimeFormat = function() {
 				if (!this.timeFormat) {
-					var targetType = new Array("msec", "sec", "min", "hour");
-					this.timeFormat = createTimeFormat(util._serverTimeTokens, "moment", serverTimeDelimiter, targetType);
+					this.timeFormat = convertFormat(util._option.server.timeFormat, "moment");
 				}
 				return this.timeFormat;
 			}
@@ -3647,40 +4009,46 @@ var DateUtil = function(option) {
 	if (option.output) {
 		//日付
 		if (option.output.dateFormat) {
-			var outputDateDelimiter = option.output.dateFormat.indexOf(util._dateDelimiter) > -1 ? util._dateDelimiter : "";
-			this._outputDateTokens = getTokens(option.output.dateFormat, this._tokenMap);
 			this.output.getDateFormat = function() {
 				if (!this.dateFormat) {
-					this.dateFormat = createDateFormat(util._outputDateTokens, "moment", outputDateDelimiter);
+					this.dateFormat = convertFormat(util._option.output.dateFormat, "moment");
 				}
 				return this.dateFormat;
 			}
 		}
+		//日付(曜日)
+		if (option.output.dateWeekdayFormat) {
+			this.output.getDateWeekdayFormat = function() {
+				if (!this.dateWeekdayFormat) {
+					this.dateWeekdayFormat = convertFormat(util._option.output.dateWeekdayFormat, "moment");
+				}
+				return this.dateWeekdayFormat;
+			}
+		}
 		//時間
-		if (option.output.timeFormat) {
-			this._outputTimeTokens = getTokens(option.output.timeFormat, this._tokenMap);
+		if (option.output.timeHourFormat && option.output.timeMinFormat && option.output.timeSecFormat) {
 			this.output.getTimeFormat = function(range) {
 				var _range = range;
 				if (!_range) _range = "sec";
+				_range = _range.toLowerCase();
 
 				if (_range === "sec") {
 					if (!this.timeSecFormat) {
-						var targetType = new Array("sec", "min", "hour");
-						this.timeSecFormat = createTimeFormat(util._outputTimeTokens, "moment", util._timeDelimiter, targetType);
+						this.timeSecFormat = convertFormat(util._option.output.timeSecFormat, "moment");
 					}
 					return this.timeSecFormat;
 				} else if (_range === "min") {
 					if (!this.timeMinFormat) {
-						var targetType = new Array("min", "hour");
-						this.timeMinFormat = createTimeFormat(util._outputTimeTokens, "moment", util._timeDelimiter, targetType);
+						this.timeMinFormat = convertFormat(util._option.output.timeMinFormat, "moment");
 					}
 					return this.timeMinFormat;
 				} else if (_range === "hour") {
 					if (!this.timeHourFormat) {
-						var targetType = new Array("hour");
-						this.timeHourFormat = createTimeFormat(util._outputTimeTokens, "moment", util._timeDelimiter, targetType);
+						this.timeHourFormat = convertFormat(util._option.output.timeHourFormat, "moment");
 					}
 					return this.timeHourFormat;
+				} else {
+					return "";
 				}
 			}
 		}
@@ -3689,65 +4057,62 @@ var DateUtil = function(option) {
 	if (option.input) {
 		//日付
 		if (option.input.dateFormat) {
-			var inputDateDelimiter = option.input.dateFormat.indexOf(util._dateDelimiter) > -1 ? util._dateDelimiter : "";
-			this._inputDateTokens = getTokens(option.input.dateFormat, this._tokenMap);
 			this.input.getDateFormat = function() {
 				if (!this.dateFormat) {
-					this.dateFormat = createDateFormat(util._inputDateTokens, "moment", inputDateDelimiter);
+					this.dateFormat = convertFormat(util._option.input.dateFormat, "moment");
 				}
 				return this.dateFormat;
 			}
 			this.datepicker.getDateFormat = function() {
 				if (!this.dateFormat) {
-					this.dateFormat = createDateFormat(util._inputDateTokens, "datepicker", inputDateDelimiter);
+					this.dateFormat = convertFormat(util._option.input.dateFormat, "datepicker");
 				}
 				return this.dateFormat;
 			}
 		}
 		//時間
-		if (option.input.timeFormat) {
-			this._inputTimeTokens = getTokens(option.input.timeFormat, this._tokenMap);
+		if (option.input.timeHourFormat && option.input.timeMinFormat && option.input.timeSecFormat) {
 			this.input.getTimeFormat = function(range) {
 				var _range = range;
 				if (!_range) _range = "sec";
+				_range = _range.toLowerCase();
 
 				if (_range === "sec") {
 					if (!this.timeSecFormat) {
-						var targetType = new Array("sec", "min", "hour");
-						this.timeSecFormat = createTimeFormat(util._inputTimeTokens, "moment", util._timeDelimiter, targetType);
+						this.timeSecFormat = convertFormat(util._option.input.timeSecFormat, "moment");
 					}
 					return this.timeSecFormat;
 				} else if (_range === "min") {
 					if (!this.timeMinFormat) {
-						var targetType = new Array("min", "hour");
-						this.timeMinFormat = createTimeFormat(util._inputTimeTokens, "moment", util._timeDelimiter, targetType);
+						this.timeMinFormat = convertFormat(util._option.input.timeMinFormat, "moment");
 					}
 					return this.timeMinFormat;
 				} else if (_range === "hour") {
 					if (!this.timeHourFormat) {
-						var targetType = new Array("hour");
-						this.timeHourFormat = createTimeFormat(util._inputTimeTokens, "moment", util._timeDelimiter, targetType);
+						this.timeHourFormat = convertFormat(util._option.input.timeHourFormat, "moment");
 					}
 					return this.timeHourFormat;
+				} else {
+					return "";
 				}
 			}
 			this.input.getHourFormat = function() {
 				if (!this.hourFormat) {
-					var token = getTimeFormatToken(util._inputTimeTokens, "hour");
+					var token = getFormatToken("hour");
 					this.hourFormat = token.moment;
 				}
 				return this.hourFormat;
 			}
 			this.input.getMinFormat = function() {
 				if (!this.minFormat) {
-					var token = getTimeFormatToken(util._inputTimeTokens, "min");
+					var token = getFormatToken("min");
 					this.minFormat = token.moment;
 				}
 				return this.minFormat;
 			}
 			this.input.getSecFormat = function() {
 				if (!this.secFormat) {
-					var token = getTimeFormatToken(util._inputTimeTokens, "sec");
+					var token = getFormatToken("sec");
 					this.secFormat = token.moment;
 				}
 				return this.secFormat;
@@ -3755,67 +4120,58 @@ var DateUtil = function(option) {
 		}
 	}
 
-	//フォーマットを分解して変換用のトークンを取得
-	function getTokens(format, map) {
-		var tokens = new Array();
-		var formatChars = format.split("");
-		var i = 0, beginIndex = -1, currentChar = null, lastChar = null;
-		for (; i < formatChars.length; i++) {
-			currentChar = formatChars[i];
-			if (lastChar === null || lastChar !== currentChar) {
-				var token = getMappedToken(format, beginIndex, i, map);
-				if (token) {
-					tokens.push(token);
-				}
-				beginIndex = i;
+	//JavaフォーマットをJSフォーマットに変換
+	function convertFormat(javaFormat, tokenType) {
+		var jsFormat = "";
+		var javaFormatChars = javaFormat.split("");
+		var i = 0, currentChar = null, lastChar = null, javaToken = "";
+		for (; i < javaFormatChars.length; i++) {
+			currentChar = javaFormatChars[i];
+			if (lastChar != null && lastChar !== currentChar) {
+				//文字列変更
+				jsFormat += getJsToken(javaToken, tokenType);
+
+				javaToken = "";
 			}
+			javaToken += currentChar;
 			lastChar = currentChar;
 		}
-		var token = getMappedToken(format, beginIndex, i, map);
-		if (token) {
-			tokens.push(token);
-		}
-		return tokens;
+		jsFormat += getJsToken(javaToken, tokenType);
+
+		return jsFormat;
 	}
-	//フォーマット内の文字列にマッチするトークンを取得
-	function getMappedToken(format, beginIndex, currentIndex, map) {
-		var tmpStr = format.substr(beginIndex, currentIndex - beginIndex);
-		if (map.get(tmpStr)) {
-			return map.get(tmpStr);
+
+	//JavaフォーマットTokenからJSフォーマットTokenに変換
+	function getJsToken(javaToken, tokenType) {
+		if (util._tokenMap.get(javaToken)) {
+			var token = util._tokenMap.get(javaToken);
+			return token[tokenType];
 		}
-		return null;
+		//ない場合はそのまま返す
+		return javaToken;
 	}
-	//日付のフォーマットを作成
-	function createDateFormat(tokens, tokenType, delimiter) {
-		var ret = new Array();
-		for (var i = 0; i < tokens.length; i++) {
-			var token = tokens[i];
-			if (token && token[tokenType]) {
-				ret.push(token[tokenType]);
+
+	//タイプに一致するトークンを取得
+	function getFormatToken(tokenType) {
+		if (typeof util._tokenMap.values === "function") {
+			var iterator = util._tokenMap.values(), token;
+			while (token = iterator.next(), !token.done) {
+				if (token && token.value.type === tokenType) {
+					return token.value;
+				}
 			}
+			return null;
+		} else {
+			//for IE11
+			var result = null;
+			util._tokenMap.forEach(function(value, key){
+				if (value && value.type === tokenType) {
+					//breakできない
+					result = value;
+				}
+			});
+			return result;
 		}
-		return ret.join(delimiter);
-	}
-	//時間のフォーマットを作成
-	function createTimeFormat(tokens, tokenType, delimiter, targetType) {
-		var ret = new Array();
-		for (var i = 0; i < tokens.length; i++) {
-			var token = tokens[i];
-			if (token && token[tokenType] && targetType.indexOf(token.type) >= 0) {
-				ret.push(token[tokenType]);
-			}
-		}
-		return ret.join(delimiter);
-	}
-	//時間の各部位のトークンを取得
-	function getTimeFormatToken(tokens, tokenType) {
-		for (var i = 0; i < tokens.length; i++) {
-			var token = tokens[i];
-			if (token && token.type === tokenType) {
-				return token;
-			}
-		}
-		return null;
 	}
 }
 //サーバ送信用フォーマット
@@ -3836,11 +4192,17 @@ DateUtil.prototype.getDatepickerDateFormat = function() {
 DateUtil.prototype.getOutputDateFormat = function() {
 	return this.output.getDateFormat();
 }
+DateUtil.prototype.getOutputDateWeekdayFormat = function() {
+	return this.output.getDateWeekdayFormat();
+}
 DateUtil.prototype.getOutputTimeFormat = function(range) {
 	return this.output.getTimeFormat(range);
 }
 DateUtil.prototype.getOutputDatetimeFormat = function(range) {
 	return this.output.getDatetimeFormat(range);
+}
+DateUtil.prototype.getOutputDatetimeWeekdayFormat = function(range) {
+	return this.output.getDatetimeWeekdayFormat(range);
 }
 DateUtil.prototype.getOutputWeekdayFormat = function() {
 	return this.output.getWeekdayFormat();
@@ -3886,17 +4248,42 @@ DateUtil.prototype.getWeekday = function(dateStr, format) {
 }
 //dateから文字列に
 DateUtil.prototype.format = function(dateObj, format) {
+	if (!format || format == "") return "";
 	var m = new moment(dateObj);
 	return m.format(format);
 }
-DateUtil.prototype.formatOutputDate = function(dateObj) {
-	return this.format(dateObj, this.getOutputDateFormat());
+DateUtil.prototype.formatOutputDate = function(dateObj, showWeekday) {
+	if (typeof showWeekday === "undefined") {
+		showWeekday = false;
+	}
+	if (showWeekday === true) {
+		return this.formatOutputDateWeekday(dateObj);
+	} else {
+		return this.format(dateObj, this.getOutputDateFormat());
+	}
+}
+DateUtil.prototype.formatOutputDateWeekday = function(dateObj) {
+	var m = new moment(dateObj);
+	m.locale(scriptContext.locale.defaultLocale);
+	return m.format(this.getOutputDateWeekdayFormat());
 }
 DateUtil.prototype.formatOutputTime = function(dateObj, range) {
 	return this.format(dateObj, this.getOutputTimeFormat(range));
 }
-DateUtil.prototype.formatOutputDatetime = function(dateObj, range) {
-	return this.format(dateObj, this.getOutputDatetimeFormat(range));
+DateUtil.prototype.formatOutputDatetime = function(dateObj, range, showWeekday) {
+	if (typeof showWeekday === "undefined") {
+		showWeekday = false;
+	}
+	if (showWeekday === true) {
+		return this.formatOutputDatetimeWeekday(dateObj, range);
+	} else {
+		return this.format(dateObj, this.getOutputDatetimeFormat(range));
+	}
+}
+DateUtil.prototype.formatOutputDatetimeWeekday = function(dateObj, range) {
+	var m = new moment(dateObj);
+	m.locale(scriptContext.locale.defaultLocale);
+	return m.format(this.getOutputDatetimeWeekdayFormat(range));
 }
 DateUtil.prototype.formatInputDate = function(dateObj) {
 	return this.format(dateObj, this.getInputDateFormat());
@@ -3926,11 +4313,16 @@ var dateUtil = new DateUtil({
 	//表示用フォーマット
 	output: {
 		dateFormat: scriptContext.locale.outputDateFormat,
-		timeFormat:scriptContext.locale.outputTimeSecFormat
+		dateWeekdayFormat: scriptContext.locale.outputDateWeekdayFormat,
+		timeHourFormat:scriptContext.locale.outputTimeHourFormat,
+		timeMinFormat:scriptContext.locale.outputTimeMinFormat,
+		timeSecFormat:scriptContext.locale.outputTimeSecFormat
 	},
 	//入力用フォーマット
 	input: {
 		dateFormat: scriptContext.locale.inputDateFormat,
-		timeFormat:scriptContext.locale.inputTimeSecFormat
+		timeHourFormat:scriptContext.locale.inputTimeHourFormat,
+		timeMinFormat:scriptContext.locale.inputTimeMinFormat,
+		timeSecFormat:scriptContext.locale.inputTimeSecFormat
 	}
 });

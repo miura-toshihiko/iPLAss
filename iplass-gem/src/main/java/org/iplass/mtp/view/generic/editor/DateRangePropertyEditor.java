@@ -66,6 +66,7 @@ public class DateRangePropertyEditor extends CustomPropertyEditor {
 					TimestampPropertyEditor.class,
 					TimePropertyEditor.class
 					},
+			displayOrder=100,
 			description="プロパティの型にあわせたプロパティエディタを選択してください。",
 			descriptionKey="generic_editor_DateRangePropertyEditor_editorDescriptionKey"
 	)
@@ -77,6 +78,7 @@ public class DateRangePropertyEditor extends CustomPropertyEditor {
 			displayNameKey="generic_editor_DateRangePropertyEditor_toPropertyNameDisplaNameKey",
 			required=true,
 			inputType=InputType.PROPERTY,
+			displayOrder=110,
 			description="このプロパティと組み合わせて表示する他のプロパティを指定します。<br>"
 					+ "指定するプロパティの型はこのプロパティに合わせて下さい。",
 			descriptionKey="generic_editor_DateRangePropertyEditor_toPropertyNameDescriptionKey"
@@ -94,6 +96,7 @@ public class DateRangePropertyEditor extends CustomPropertyEditor {
 					TimestampPropertyEditor.class,
 					TimePropertyEditor.class
 					},
+			displayOrder=120,
 			description="プロパティの型にあわせたプロパティエディタを選択してください。<br>"
 					+ "未指定の場合、プロパティエディタの設定が有効になります。",
 			descriptionKey="generic_editor_DateRangePropertyEditor_toEditorDescriptionKey"
@@ -106,7 +109,9 @@ public class DateRangePropertyEditor extends CustomPropertyEditor {
 			displayNameKey="generic_editor_DateRangePropertyEditor_errorMessageNameDisplaNameKey",
 			description="FromとToの大小関係が不正な場合のエラーメッセージを設定します。",
 			descriptionKey="generic_editor_DateRangePropertyEditor_errorMessageNameDescriptionKey",
-			useMultiLang=true
+			inputType=InputType.MULTI_LANG,
+			multiLangField = "localizedErrorMessageList",
+			displayOrder=130
 	)
 	@EntityViewField()
 	@MultiLang()
@@ -116,7 +121,8 @@ public class DateRangePropertyEditor extends CustomPropertyEditor {
 	@MetaFieldInfo(
 			displayName="多言語設定情報",
 			displayNameKey="generic_editor_DateRangePropertyEditor_localizedErrorMessageListDisplaNameKey",
-			inputType=InputType.LANGUAGE
+			inputType=InputType.MULTI_LANG_LIST,
+			displayOrder=140
 	)
 	@EntityViewField()
 	private List<LocalizedStringDefinition> localizedErrorMessageList;

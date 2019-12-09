@@ -21,6 +21,8 @@
 package org.iplass.mtp.impl.web.actionmapping;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -43,6 +45,8 @@ import org.iplass.mtp.impl.metadata.BaseRootMetaData;
 import org.iplass.mtp.impl.metadata.MetaDataConfig;
 import org.iplass.mtp.impl.util.ObjectUtil;
 import org.iplass.mtp.impl.web.ParameterValueMap;
+import org.iplass.mtp.impl.web.RequestPath.PathType;
+import org.iplass.mtp.impl.web.RequestRestriction;
 import org.iplass.mtp.impl.web.WebFrontendService;
 import org.iplass.mtp.impl.web.WebProcessRuntimeException;
 import org.iplass.mtp.impl.web.WebRequestContext;
@@ -52,6 +56,7 @@ import org.iplass.mtp.impl.web.actionmapping.ParamMap.ParamMapRuntime;
 import org.iplass.mtp.impl.web.actionmapping.Result.ResultRuntime;
 import org.iplass.mtp.impl.web.actionmapping.cache.MetaCacheCriteria;
 import org.iplass.mtp.impl.web.actionmapping.cache.MetaCacheCriteria.CacheCriteriaRuntime;
+import org.iplass.mtp.impl.web.fileupload.MultiPartParameterValueMap;
 import org.iplass.mtp.impl.web.template.TemplateService;
 import org.iplass.mtp.impl.web.template.MetaTemplate.TemplateRuntime;
 import org.iplass.mtp.spi.ServiceRegistry;
@@ -62,6 +67,8 @@ import org.iplass.mtp.web.actionmapping.definition.HttpMethodType;
 import org.iplass.mtp.web.actionmapping.definition.ParamMapDefinition;
 import org.iplass.mtp.web.actionmapping.definition.result.ResultDefinition;
 import org.iplass.mtp.web.interceptor.RequestInterceptor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * ActionMappingの定義。
@@ -70,9 +77,9 @@ import org.iplass.mtp.web.interceptor.RequestInterceptor;
  */
 public class MetaActionMapping extends BaseRootMetaData implements DefinableMetaData<ActionMappingDefinition> {
 
-	//FIXME Intercepter単位に設定のプラグインが出来る機構に。
+	//TODO IntercepterのActionMapping単位の変更が出来る機構に。
 
-
+	private static Logger logger = LoggerFactory.getLogger(MetaActionMapping.class);
 
 	private static final long serialVersionUID = -9160640479328183543L;
 
@@ -125,6 +132,35 @@ public class MetaActionMapping extends BaseRootMetaData implements DefinableMeta
 	private HttpMethodType[] allowMethod;
 
 	private boolean needTrustedAuthenticate;
+
+	private String[] allowRequestContentTypes;
+	
+	private Long maxRequestBodySize;
+	private Long maxFileSize;
+
+	public Long getMaxFileSize() {
+		return maxFileSize;
+	}
+
+	public void setMaxFileSize(Long maxFileSize) {
+		this.maxFileSize = maxFileSize;
+	}
+
+	public Long getMaxRequestBodySize() {
+		return maxRequestBodySize;
+	}
+
+	public void setMaxRequestBodySize(Long maxRequestBodySize) {
+		this.maxRequestBodySize = maxRequestBodySize;
+	}
+
+	public String[] getAllowRequestContentTypes() {
+		return allowRequestContentTypes;
+	}
+
+	public void setAllowRequestContentTypes(String[] allowRequestContentTypes) {
+		this.allowRequestContentTypes = allowRequestContentTypes;
+	}
 
 	public boolean isNeedTrustedAuthenticate() {
 		return needTrustedAuthenticate;
@@ -317,6 +353,17 @@ public class MetaActionMapping extends BaseRootMetaData implements DefinableMeta
 		}
 
 		needTrustedAuthenticate = definition.isNeedTrustedAuthenticate();
+		
+
+		if (definition.getAllowRequestContentTypes() != null) {
+			allowRequestContentTypes = new String[definition.getAllowRequestContentTypes().length];
+			System.arraycopy(definition.getAllowRequestContentTypes(), 0, allowRequestContentTypes, 0, allowRequestContentTypes.length);
+		} else {
+			allowRequestContentTypes = null;
+		}
+		
+		maxRequestBodySize = definition.getMaxRequestBodySize();
+		maxFileSize = definition.getMaxFileSize();
 	}
 
 	//Meta → Definition
@@ -377,6 +424,13 @@ public class MetaActionMapping extends BaseRootMetaData implements DefinableMeta
 
 		definition.setNeedTrustedAuthenticate(needTrustedAuthenticate);
 
+		if (allowRequestContentTypes != null) {
+			definition.setAllowRequestContentTypes(new String[allowRequestContentTypes.length]);
+			System.arraycopy(allowRequestContentTypes, 0, definition.getAllowRequestContentTypes(), 0, allowRequestContentTypes.length);
+		}
+		
+		definition.setMaxRequestBodySize(maxRequestBodySize);
+		definition.setMaxFileSize(maxFileSize);
 		return definition;
 	}
 
@@ -394,6 +448,9 @@ public class MetaActionMapping extends BaseRootMetaData implements DefinableMeta
 		private ClientCacheType clientCacheTypeRuntime;
 
 		private CacheCriteriaRuntime cacheCriteriaRuntime;
+		
+		private RequestRestriction requestRestrictionRuntime;
+		private String allowString;
 
 		public ActionMappingRuntime(MetaDataConfig metaDataConfig) {
 
@@ -446,7 +503,35 @@ public class MetaActionMapping extends BaseRootMetaData implements DefinableMeta
 				} else {
 					clientCacheTypeRuntime = getClientCacheType();
 				}
-
+				
+				requestRestrictionRuntime = wfs.getRequestRestriction(getName(), PathType.ACTION);
+				if (!requestRestrictionRuntime.isForce()) {
+					if (maxRequestBodySize != null || maxFileSize != null
+							|| (allowMethod != null && allowMethod.length > 0)
+							|| (allowRequestContentTypes != null && allowRequestContentTypes.length > 0)) {
+						requestRestrictionRuntime = requestRestrictionRuntime.copy();
+						if (maxRequestBodySize != null) {
+							requestRestrictionRuntime.setMaxBodySize(maxRequestBodySize);
+						}
+						if (maxFileSize != null) {
+							requestRestrictionRuntime.setMaxFileSize(maxFileSize);
+						}
+						if (allowMethod != null && allowMethod.length > 0) {
+							ArrayList<String> aml = new ArrayList<>(allowMethod.length);
+							for (HttpMethodType hmt: allowMethod) {
+								aml.add(hmt.toString());
+							}
+							requestRestrictionRuntime.setAllowMethods(aml);
+						}
+						if (allowRequestContentTypes != null && allowRequestContentTypes.length > 0) {
+							requestRestrictionRuntime.setAllowContentTypes(Arrays.asList(allowRequestContentTypes));
+						}
+						
+						requestRestrictionRuntime.init();
+					}
+				}
+				allowString = allowString();
+				
 				//キャッシュ基準
 				if (cacheCriteria != null) {
 					cacheCriteriaRuntime = cacheCriteria.createRuntime(MetaActionMapping.this);
@@ -457,14 +542,46 @@ public class MetaActionMapping extends BaseRootMetaData implements DefinableMeta
 				cmdInterceptors = is.getInterceptors(ActionMappingService.COMMAND_INTERCEPTOR_NAME);
 				ActionMappingService as = ServiceRegistry.getRegistry().getService(ActionMappingService.class);
 				reqInterceptors = as.getInterceptors();
+				
 			} catch (RuntimeException e) {
 				setIllegalStateException(e);
 			}
 
 		}
+		
+		private String allowString() {
+			StringBuilder sb = new StringBuilder();
+			for (String m: requestRestrictionRuntime.getAllowMethods()) {
+				if (sb.length() != 0) {
+					sb.append(", ");
+				}
+				switch (m) {
+				case GET:
+					sb.append(GET + ", " + HEAD);
+					break;
+				case POST:
+					sb.append(POST);
+					break;
+				case PUT:
+					sb.append(PUT);
+					break;
+				case DELETE:
+					sb.append(DELETE);
+					break;
+				default:
+					break;
+				}
+			}
+			sb.append(", " + TRACE + ", " + OPTIONS);
+			return sb.toString();
+		}
 
 		public MetaActionMapping getMetaData() {
 			return MetaActionMapping.this;
+		}
+		
+		public RequestRestriction getRequestRestriction() {
+			return requestRestrictionRuntime;
 		}
 
 		public ResultRuntime getResult(String cmdResult) {
@@ -491,54 +608,9 @@ public class MetaActionMapping extends BaseRootMetaData implements DefinableMeta
 			return result;
 		}
 
-		public boolean isAllowedMethod(HttpMethodType requestMethod) {
-			if (allowMethod == null || allowMethod.length == 0) {
-				return true;
-			}
-			for (HttpMethodType m: allowMethod) {
-				if (m == requestMethod) {
-					return true;
-				}
-			}
-			return false;
-		}
-
 		private void doOptions(WebRequestStack req) {
-			String allow = allowString();
-			req.getResponse().setHeader("Allow", allow);
-		}
-
-		private String allowString() {
-			String allow;
-			if (allowMethod == null || allowMethod.length == 0) {
-				allow = GET + ", " + HEAD + ", " + POST + ", " + PUT + ", " + DELETE + ", " + TRACE + ", " + OPTIONS;
-			} else {
-				StringBuilder sb = new StringBuilder();
-				for (HttpMethodType m: allowMethod) {
-					if (sb.length() != 0) {
-						sb.append(", ");
-					}
-					switch (m) {
-					case GET:
-						sb.append(GET + ", " + HEAD);
-						break;
-					case POST:
-						sb.append(POST);
-						break;
-					case PUT:
-						sb.append(PUT);
-						break;
-					case DELETE:
-						sb.append(DELETE);
-						break;
-					default:
-						break;
-					}
-				}
-				sb.append(", " + TRACE + ", " + OPTIONS);
-				allow = sb.toString();
-			}
-			return allow;
+			//TODO ActionにもCORS必要か？（canvasとかで利用される？）MetaData側でも設定可能に
+			req.getResponse().setHeader("Allow", allowString);
 		}
 
 		private void doTrace(WebRequestStack req) throws IOException {
@@ -571,7 +643,6 @@ public class MetaActionMapping extends BaseRootMetaData implements DefinableMeta
 			checkState();
 
 			String httpMethod = req.getRequest().getMethod();
-			HttpMethodType forCheck = null;
 			switch (httpMethod) {
 			case TRACE:
 				doTrace(req);
@@ -580,37 +651,43 @@ public class MetaActionMapping extends BaseRootMetaData implements DefinableMeta
 				doOptions(req);
 				return;//no process action
 			case DELETE:
-				forCheck = HttpMethodType.DELETE;
 				break;
 			case HEAD:
 				req.setResponse(new NoBodyResponse(req.getResponse()));
-				forCheck = HttpMethodType.GET;
 				break;
 			case GET:
-				forCheck = HttpMethodType.GET;
 				break;
 			case POST:
-				forCheck = HttpMethodType.POST;
 				break;
 			case PUT:
-				forCheck = HttpMethodType.PUT;
 				break;
 			default:
 				req.getResponse().sendError(HttpServletResponse.SC_NOT_IMPLEMENTED);
 	            return;
 			}
 
-			if (!isAllowedMethod(forCheck)) {
+			if (!requestRestrictionRuntime.isAllowedMethod(httpMethod)) {
+				if (logger.isDebugEnabled()) {
+					logger.debug("reject Request. HTTP Method:" + httpMethod + " not allowed for Action:" + getName());
+				}
 		        String protocol = req.getRequest().getProtocol();
 		        if (protocol.endsWith("1.1")) {
-					req.getResponse().setHeader("Allow", allowString());
+					req.getResponse().setHeader("Allow", allowString);
 		        	req.getResponse().sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
 		        } else {
 		        	req.getResponse().sendError(HttpServletResponse.SC_BAD_REQUEST);
 		        }
 		        return;
 			}
-
+			
+			String rct = req.getRequest().getContentType();
+			if (rct != null && !requestRestrictionRuntime.isAllowedContentType(rct)) {
+				if (logger.isDebugEnabled()) {
+					logger.debug("reject Request. Content Type:" + rct + " not allowed for Action:" + getName());
+				}
+	        	req.getResponse().sendError(HttpServletResponse.SC_UNSUPPORTED_MEDIA_TYPE);
+		        return;
+			}
 
 			// 部品の場合、クライアントからの直接呼出し不可
 			if (isParts && req.isClientDirectRequest()) {
@@ -629,6 +706,9 @@ public class MetaActionMapping extends BaseRootMetaData implements DefinableMeta
 			case CACHE:
 				WebUtil.setCacheControlHeader(req, true, clientCacheMaxAge);
 				break;
+			case CACHE_PUBLIC:
+				WebUtil.setCacheControlHeader(req, true, true, clientCacheMaxAge);
+				break;
 			case NO_CACHE:
 				WebUtil.setCacheControlHeader(req, false, -1);
 				break;
@@ -643,6 +723,13 @@ public class MetaActionMapping extends BaseRootMetaData implements DefinableMeta
 			if (requestContext instanceof WebRequestContext) {
 				WebRequestContext webRequestContext = (WebRequestContext) requestContext;
 				ParameterValueMap currentValueMap = webRequestContext.getValueMap();
+				
+				//set maxFileSize
+				if (currentValueMap instanceof MultiPartParameterValueMap) {
+					((MultiPartParameterValueMap) currentValueMap).setMaxFileSize(requestRestrictionRuntime.maxFileSize());
+				}
+				
+				//parameter map
 				if (paramMap != null) {
 					VariableParameterValueMap variableValueMap = new VariableParameterValueMap(currentValueMap, req.getRequestPath(), this);
 					webRequestContext.setValueMap(variableValueMap);

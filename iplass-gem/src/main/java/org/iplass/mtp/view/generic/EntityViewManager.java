@@ -1,19 +1,19 @@
 /*
  * Copyright (C) 2011 INFORMATION SERVICES INTERNATIONAL - DENTSU, LTD. All Rights Reserved.
- * 
+ *
  * Unless you have purchased a commercial license,
  * the following license terms apply:
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
  * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
@@ -68,6 +68,18 @@ public interface EntityViewManager extends TypedDefinitionManager<EntityView> {
 	 * @return エディター
 	 */
 	public PropertyEditor getPropertyEditor(String defName, String viewType, String viewName, String propName);
+
+	/**
+	 * 指定の画面定義に設定されているEditorを取得します。
+	 *
+	 * @param defName Entity定義の名前
+	 * @param viewType FormViewの種類
+	 * @param viewName View名
+	 * @param propName プロパティ名
+	 * @param refSection 参照セクションインデックス
+	 * @return エディター
+	 */
+	public PropertyEditor getPropertyEditor(String defName, String viewType, String viewName, String propName, Integer refSectionIndex);
 
 	/**
 	 * スクリプトテンプレートを実行します。
@@ -144,6 +156,14 @@ public interface EntityViewManager extends TypedDefinitionManager<EntityView> {
 	public DetailFormView createDefaultDetailFormView(String definitionName);
 
 	/**
+	 * Entity定義に対応する標準のBulkFormViewを返します。
+	 *
+	 * @param definitionName Entity定義名
+	 * @return BulkFormView
+	 */
+	public BulkFormView createDefaultBulkFormView(String definitionName);
+
+	/**
 	 * カスタムスタイルを取得します。
 	 *
 	 * @param definitionName Entity定義名
@@ -154,6 +174,17 @@ public interface EntityViewManager extends TypedDefinitionManager<EntityView> {
 	 * @return DetailFormView
 	 */
 	public String getCustomStyle(String definitionName, String scriptKey, String editorScriptKey, Entity entity, Object propValue);
+
+	/**
+	 * エレメントの表示可否を判定します。
+	 *
+	 * @param definitionName Entity定義名
+	 * @param elementRuntimeId エレメントのランタイムID
+	 * @param outputType 表示タイプ
+	 * @param entity 表示対象のエンティティ
+	 * @return 表示可否
+	 */
+	public boolean isDisplayElement(String definitionName, String elementRuntimeId, OutputType outputType, Entity entity);
 
 	/**
 	 * ボタンの表示可否を判定します。
@@ -185,9 +216,10 @@ public interface EntityViewManager extends TypedDefinitionManager<EntityView> {
 	 * @param propName プロパティ名
 	 * @param autocompletionKey 自動補完のキー
 	 * @param param 連動元の値
+	 * @param currentValue 連動先の値
 	 * @return 自動補完の値
 	 */
-	public Object getAutocompletionValue(String definitionName, String viewName, String viewType, String propName, String autocompletionKey, Integer referenceSectionIndex, Map<String, String[]> param);
+	public Object getAutocompletionValue(String definitionName, String viewName, String viewType, String propName, String autocompletionKey, Integer referenceSectionIndex, Map<String, String[]> param, List<String> currentValue);
 
 	/**
 	 * <p>

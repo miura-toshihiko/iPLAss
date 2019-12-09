@@ -56,6 +56,21 @@
 	String modalTarget = request.getParameter(Constants.MODAL_TARGET);
 	modalTarget = StringUtil.escapeHtml(modalTarget);
 	if (modalTarget == null) modalTarget = "";
+	String parentDefName = request.getParameter(Constants.PARENT_DEFNAME);
+	parentDefName = StringUtil.escapeHtml(parentDefName);
+	if (parentDefName == null) parentDefName = "";
+	String parentViewName = request.getParameter(Constants.PARENT_VIEWNAME);
+	parentViewName = StringUtil.escapeHtml(parentViewName);
+	if (parentViewName == null) parentViewName = "";
+	String parentPropName = request.getParameter(Constants.PARENT_PROPNAME);
+	parentPropName = StringUtil.escapeHtml(parentPropName);
+	if (parentPropName == null) parentPropName = "";
+	String viewType = request.getParameter(Constants.VIEW_TYPE);
+	viewType = StringUtil.escapeHtml(viewType);
+	if (viewType == null) viewType = "";
+	String refSectionIndex = request.getParameter(Constants.REF_SECTION_INDEX);
+	refSectionIndex = StringUtil.escapeHtml(refSectionIndex);
+	if (refSectionIndex == null) refSectionIndex = "";
 
 	//コマンドから
 	DetailFormViewData data = (DetailFormViewData) request.getAttribute(Constants.DATA);
@@ -106,6 +121,9 @@
 	//各プロパティでの権限チェック用に定義名をリクエストに保存
 	request.setAttribute(Constants.DEF_NAME, defName);
 	request.setAttribute(Constants.ROOT_DEF_NAME, defName);	//NestTableの場合にDEF_NAMEが置き換わるので別名でRootのDefNameをセット
+
+	//editor以下で参照するパラメータ
+	request.setAttribute(Constants.VIEW_NAME, viewName);
 
 	//section以下で参照するパラメータ
 	request.setAttribute(Constants.OUTPUT_TYPE, type);
@@ -212,6 +230,11 @@ function dataUnlock() {
 <input type="hidden" name="<%=Constants.DEF_NAME%>" value="<c:out value="<%=defName%>"/>" />
 <input type="hidden" name="<%=Constants.REF_EDIT%>" value="<c:out value="<%=refEdit%>"/>" />
 <input type="hidden" name="<%=Constants.MODAL_TARGET%>" value="<c:out value="<%=modalTarget%>"/>" />
+<input type="hidden" name="<%=Constants.PARENT_DEFNAME%>" value="<c:out value="<%=parentDefName%>" />" />
+<input type="hidden" name="<%=Constants.PARENT_VIEWNAME%>" value="<c:out value="<%=parentViewName%>" />" />
+<input type="hidden" name="<%=Constants.PARENT_PROPNAME%>" value="<c:out value="<%=parentPropName%>" />" />
+<input type="hidden" name="<%=Constants.VIEW_TYPE%>" value="<c:out value="<%=viewType%>" />" />
+<input type="hidden" name="<%=Constants.REF_SECTION_INDEX %>" value="<c:out value="<%=refSectionIndex%>" />" />
 <%	if (oid != null) { %>
 <input type="hidden" name="<%=Constants.OID%>" value="<c:out value="<%=oid%>"/>" />
 <%	}
@@ -239,7 +262,7 @@ function dataUnlock() {
 <jsp:include page="../sectionNavi.inc.jsp" />
 <%
 	for (Section section : data.getView().getSections()) {
-		if (!section.isDispFlag()) continue;
+		if (!EntityViewUtil.isDisplayElement(defName, section.getElementRuntimeId(), OutputType.VIEW)) continue;
 		request.setAttribute(Constants.ELEMENT, section);
 
 		String path = EntityViewUtil.getJspPath(section, ViewConst.DESIGN_TYPE_GEM);

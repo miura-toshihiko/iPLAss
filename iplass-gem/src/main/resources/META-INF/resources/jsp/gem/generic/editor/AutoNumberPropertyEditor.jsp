@@ -50,8 +50,8 @@
 	}
 	String propName = editor.getPropertyName();
 
-	if (OutputType.EDIT == type || OutputType.VIEW == type) {
-		//詳細編集 or 詳細表示
+	if (OutputType.EDIT == type || OutputType.VIEW == type || OutputType.BULK == type) {
+		//詳細編集 or 詳細表示 or 一括更新編集
 		String str = propValue != null ? propValue.toString() : "";
 
 		//カスタムスタイル
@@ -102,7 +102,7 @@ $(function() {
 	addNormalValidator(function() {
 		var val = $(":text[name='" + es("<%=StringUtil.escapeJavaScript(propName)%>") + "']").val();
 		if (typeof val === "undefined" || val == null || val == "") {
-			alert(scriptContext.locale.requiredMsg.replace("{0}", "<%=StringUtil.escapeJavaScript(displayLabel)%>"));
+			alert(scriptContext.gem.locale.common.requiredMsg.replace("{0}", "<%=StringUtil.escapeJavaScript(displayLabel)%>"));
 			return false;
 		}
 		return true;

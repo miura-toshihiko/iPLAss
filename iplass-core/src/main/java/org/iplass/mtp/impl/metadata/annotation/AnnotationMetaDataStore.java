@@ -1,19 +1,19 @@
 /*
  * Copyright (C) 2012 INFORMATION SERVICES INTERNATIONAL - DENTSU, LTD. All Rights Reserved.
- * 
+ *
  * Unless you have purchased a commercial license,
  * the following license terms apply:
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
  * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
@@ -76,7 +76,12 @@ public class AnnotationMetaDataStore implements MetaDataStore {
 	}
 
 	@Override
-	public List<MetaDataEntryInfo> definitionList(final int tenantId, final String prefixPath)
+	public List<MetaDataEntryInfo> definitionList(int tenantId, String prefixPath) throws MetaDataRuntimeException {
+		return definitionList(tenantId, prefixPath, false);
+	}
+
+	@Override
+	public List<MetaDataEntryInfo> definitionList(final int tenantId, final String prefixPath, boolean withInvalid)
 			throws MetaDataRuntimeException {
 		String path = prefixPath;
 		if (path != null) {
@@ -179,7 +184,8 @@ public class AnnotationMetaDataStore implements MetaDataStore {
 								String path = e.getKey();
 								if (pathMetaMap.containsKey(path)) {
 									if (logger.isDebugEnabled()) {
-										logger.debug("already use the path:" + path + " metaData:" + pathMetaMap.get(path).getClass());
+										logger.debug("already use the path:" + path + " metaData:" + pathMetaMap.get(path).getClass()
+												+ " annotatedClass:" + annotatedClass);
 									}
 								}
 								AnnotateMetaDataEntry metaData = e.getValue();
@@ -260,7 +266,17 @@ public class AnnotationMetaDataStore implements MetaDataStore {
 
 	@Override
 	public List<MetaDataEntryInfo> getHistoryById(int tenantId, String id) {
-		// TODO 未使用
+		//unsupported
 		return null;
+	}
+
+	@Override
+	public List<Integer> getTenantIdsOf(String id) {
+		//unsupported
+		return null;
+	}
+
+	public void purgeById(int tenantId, String id) throws MetaDataRuntimeException {
+		//unsupported
 	}
 }

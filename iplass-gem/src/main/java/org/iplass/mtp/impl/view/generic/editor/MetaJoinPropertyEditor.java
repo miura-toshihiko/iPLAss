@@ -25,12 +25,16 @@ import java.util.List;
 
 import org.iplass.mtp.impl.entity.EntityContext;
 import org.iplass.mtp.impl.entity.EntityHandler;
+import org.iplass.mtp.impl.entity.property.PropertyHandler;
+import org.iplass.mtp.impl.entity.property.ReferencePropertyHandler;
 import org.iplass.mtp.impl.util.ObjectUtil;
+import org.iplass.mtp.impl.view.generic.HasMetaNestProperty;
 import org.iplass.mtp.view.generic.editor.JoinPropertyEditor;
 import org.iplass.mtp.view.generic.editor.NestProperty;
 import org.iplass.mtp.view.generic.editor.PropertyEditor;
+import org.iplass.mtp.view.generic.editor.ReferencePropertyEditor;
 
-public class MetaJoinPropertyEditor extends MetaCustomPropertyEditor implements HasNestProperty {
+public class MetaJoinPropertyEditor extends MetaCustomPropertyEditor implements HasMetaNestProperty {
 
 	/** SerialVersionUID */
 	private static final long serialVersionUID = 7750500799495855836L;
@@ -50,6 +54,9 @@ public class MetaJoinPropertyEditor extends MetaCustomPropertyEditor implements 
 
 	/** プロパティ */
 	private List<MetaNestProperty> properties;
+
+	/** ネストプロパティの検証エラーメッセージをまとめて表示 */
+	private boolean showNestPropertyErrors;
 
 	/**
 	 * オブジェクトIDを取得します。
@@ -125,6 +132,14 @@ public class MetaJoinPropertyEditor extends MetaCustomPropertyEditor implements 
 		return getProperties();
 	}
 
+	public boolean isShowNestPropertyErrors() {
+		return showNestPropertyErrors;
+	}
+
+	public void setShowNestPropertyErrors(boolean showNestPropertyErrors) {
+		this.showNestPropertyErrors = showNestPropertyErrors;
+	}
+
 	@Override
 	public void applyConfig(PropertyEditor _editor) {
 		super.fillFrom(_editor);
@@ -136,14 +151,28 @@ public class MetaJoinPropertyEditor extends MetaCustomPropertyEditor implements 
 
 		objectId = entity.getMetaData().getId();
 		format = e.getFormat();
+		showNestPropertyErrors = e.isShowNestPropertyErrors();
 		editor = MetaPropertyEditor.createInstance(e.getEditor());
 		if (e.getEditor() != null) {
+			fillCustomPropertyEditor(e.getEditor(), e.getPropertyName(), metaContext, entity);
 			editor.applyConfig(e.getEditor());
 		}
 		for (NestProperty nest : e.getProperties()) {
 			MetaNestProperty mnp = new MetaNestProperty();
 			mnp.applyConfig(nest, entity, null);
 			if (mnp.getPropertyId() != null) addProperty(mnp);
+		}
+	}
+
+	private void fillCustomPropertyEditor(PropertyEditor editor, String propName, EntityContext context, EntityHandler entity) {
+		PropertyHandler ph = entity.getProperty(propName, context);
+		if (ph == null) return;
+
+		if (editor instanceof ReferencePropertyEditor) {
+			if (ph instanceof ReferencePropertyHandler) {
+				String objName = ((ReferencePropertyHandler) ph).getReferenceEntityHandler(context).getMetaData().getName();
+				((ReferencePropertyEditor) editor).setObjectName(objName);
+			}
 		}
 	}
 
@@ -160,6 +189,7 @@ public class MetaJoinPropertyEditor extends MetaCustomPropertyEditor implements 
 
 		_editor.setObjectName(entity.getMetaData().getName());
 		_editor.setFormat(format);
+		_editor.setShowNestPropertyErrors(showNestPropertyErrors);
 		if (editor != null) {
 			_editor.setEditor(editor.currentConfig(propertyName));
 		}

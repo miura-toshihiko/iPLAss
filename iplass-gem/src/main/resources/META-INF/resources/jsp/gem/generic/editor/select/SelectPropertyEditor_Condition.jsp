@@ -140,7 +140,7 @@ $(function() {
 	addNormalValidator(function() {
 		var val = $(":checkbox[name='" + es("<%=StringUtil.escapeJavaScript(propName)%>") + "']:checked").val();
 		if (typeof val === "undefined" || val == null || val == "") {
-			alert(scriptContext.locale.requiredMsg.replace("{0}", "<%=StringUtil.escapeJavaScript(displayLabel)%>"));
+			alert(scriptContext.gem.locale.common.requiredMsg.replace("{0}", "<%=StringUtil.escapeJavaScript(displayLabel)%>"));
 			return false;
 		}
 		return true;
@@ -153,8 +153,12 @@ $(function() {
 <%
 	} else if (editor.getDisplayType() == SelectDisplayType.RADIO) {
 		String value = "";
-		if (propValue != null && propValue.length > 0) {
-			value = propValue[0];
+		if (_propValue == null || _propValue.length == 0) {
+			if (propValue != null && propValue.length > 0) {
+				value = propValue[0];
+			}
+		} else {
+			value = _propValue[0];
 		}
 		String defaultCheckValue = "";
 		if (defaultValue != null && defaultValue.length > 0) {
@@ -198,7 +202,7 @@ $(function() {
 	addNormalValidator(function() {
 		var val = $(":radio[name='" + es("<%=StringUtil.escapeJavaScript(propName)%>") + "']:checked").val();
 		if (typeof val === "undefined" || val == null || val == "") {
-			alert(scriptContext.locale.requiredMsg.replace("{0}", "<%=StringUtil.escapeJavaScript(displayLabel)%>"));
+			alert(scriptContext.gem.locale.common.requiredMsg.replace("{0}", "<%=StringUtil.escapeJavaScript(displayLabel)%>"));
 			return false;
 		}
 		return true;
@@ -247,7 +251,7 @@ $(function() {
 	addNormalValidator(function() {
 		var val = $("select[name='" + es("<%=StringUtil.escapeJavaScript(propName)%>") + "']").val();
 		if (typeof val === "undefined" || val == null || val == "") {
-			alert(scriptContext.locale.requiredMsg.replace("{0}", "<%=StringUtil.escapeJavaScript(displayLabel)%>"));
+			alert(scriptContext.gem.locale.common.requiredMsg.replace("{0}", "<%=StringUtil.escapeJavaScript(displayLabel)%>"));
 			return false;
 		}
 		return true;

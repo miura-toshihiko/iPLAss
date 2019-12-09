@@ -273,6 +273,9 @@ public class MetaActionMappingFactory implements
 				case CACHE:
 					metaActionMapping.setClientCacheType(org.iplass.mtp.web.actionmapping.definition.ClientCacheType.CACHE);
 					break;
+				case CACHE_PUBLIC:
+					metaActionMapping.setClientCacheType(org.iplass.mtp.web.actionmapping.definition.ClientCacheType.CACHE_PUBLIC);
+					break;
 				case NO_CACHE:
 					metaActionMapping.setClientCacheType(org.iplass.mtp.web.actionmapping.definition.ClientCacheType.NO_CACHE);
 					break;
@@ -288,6 +291,18 @@ public class MetaActionMappingFactory implements
 			metaActionMapping.setAllowMethod(allowMethods);
 		}
 
+		if (actionMapping.allowRequestContentTypes().length > 0) {
+			String[] allowRequestContentTypes = new String[actionMapping.allowRequestContentTypes().length];
+			System.arraycopy(actionMapping.allowRequestContentTypes(), 0, allowRequestContentTypes, 0, allowRequestContentTypes.length);
+			metaActionMapping.setAllowRequestContentTypes(allowRequestContentTypes);
+		}
+		if (actionMapping.maxRequestBodySize() != Long.MIN_VALUE) {
+			metaActionMapping.setMaxRequestBodySize(actionMapping.maxRequestBodySize());
+		}
+		if (actionMapping.maxFileSize() != Long.MIN_VALUE) {
+			metaActionMapping.setMaxFileSize(actionMapping.maxFileSize());
+		}
+		
 		metaActionMapping.setNeedTrustedAuthenticate(actionMapping.needTrustedAuthenticate());
 		metaActionMapping.setParts(actionMapping.parts());
 		metaActionMapping.setPrivilaged(actionMapping.privilaged());

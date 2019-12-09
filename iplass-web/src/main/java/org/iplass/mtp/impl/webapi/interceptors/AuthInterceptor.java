@@ -22,12 +22,9 @@ package org.iplass.mtp.impl.webapi.interceptors;
 import java.util.HashMap;
 import java.util.Map;
 
-import javax.servlet.http.HttpServletRequest;
-
 import org.iplass.mtp.ApplicationException;
 import org.iplass.mtp.auth.NeedTrustedAuthenticationException;
 import org.iplass.mtp.auth.NoPermissionException;
-import org.iplass.mtp.auth.login.IdPasswordCredential;
 import org.iplass.mtp.command.interceptor.CommandInterceptor;
 import org.iplass.mtp.command.interceptor.CommandInvocation;
 import org.iplass.mtp.impl.auth.AuthContextHolder;
@@ -40,6 +37,7 @@ import org.iplass.mtp.impl.auth.authenticate.AutoLoginInstruction;
 import org.iplass.mtp.impl.auth.authenticate.token.web.AuthorizationRequiredException;
 import org.iplass.mtp.impl.auth.authenticate.token.web.BearerTokenAutoLoginHandler;
 import org.iplass.mtp.impl.core.ExecuteContext;
+import org.iplass.mtp.impl.session.SessionService;
 import org.iplass.mtp.impl.web.WebResourceBundleUtil;
 import org.iplass.mtp.impl.web.i18n.LangSelector;
 import org.iplass.mtp.impl.web.token.TokenStore;
@@ -60,11 +58,9 @@ public class AuthInterceptor implements CommandInterceptor {
 
 	private static Logger logger = LoggerFactory.getLogger(AuthInterceptor.class);
 
-	public static final String AUTH_ID_HEADER = "X-Auth-Id";
-	public static final String AUTH_PASSWORD_HEADER = "X-Auth-Password";
-	
 	private LangSelector lang = new LangSelector();
 	private AuthService authService = ServiceRegistry.getRegistry().getService(AuthService.class);
+	private SessionService sessionService = ServiceRegistry.getRegistry().getService(SessionService.class);
 
 	private AuthContextHolder getAuthContextHolder(WebApiRuntime webapi) {
 		if (webapi.getMetaData().isPrivilaged()) {
@@ -77,33 +73,8 @@ public class AuthInterceptor implements CommandInterceptor {
 		}
 	}
 	
-	private boolean withCustomHeaderLogin(WebApiInvocationImpl invocation, AuthService authService, UserContext user) {
-		HttpServletRequest req = (HttpServletRequest) invocation.getRequest().getAttribute(WebRequestConstants.SERVLET_REQUEST);
-		//カスタムヘッダーによる認証処理
-		
-		String id = req.getHeader(AUTH_ID_HEADER);
-		if (id == null || id.length() == 0) {
-			return false;
-		}
-		String pass = req.getHeader(AUTH_PASSWORD_HEADER);
-		
-		authService.login(new IdPasswordCredential(id, pass));
-		
-		//transaction token を返却
-		String token = TokenStore.getFixedToken(invocation.getRequest().getSession());
-		ResponseHeader res = (ResponseHeader) invocation.getRequest().getAttribute(WebRequestConstants.RESPONSE_HEADER);
-		res.setHeader(TokenStore.TOKEN_HEADER_NAME, token);
-		
-		return true;
-	}
-	
-	private void processAutoLogin(WebApiInvocationImpl invocation, AuthService authService) {
+	private void processAutoLogin(WebApiInvocationImpl invocation) {
 		UserContext user = authService.getCurrentSessionUserContext();
-		
-		//TODO AutoLoginHandlerでの処理に
-		if (withCustomHeaderLogin(invocation, authService, user)) {
-			return;
-		}
 		
 		//process auto login...
 
@@ -111,19 +82,13 @@ public class AuthInterceptor implements CommandInterceptor {
 			AuthenticationProvider ap = authService.getAuthenticationProvider();
 			AutoLoginHandler alh = ap.getAutoLoginHandler();
 			if (alh != null) {
-				//TODO BearerTokenAutoLoginHandlerを参照してしまう。。
-				if (alh instanceof BearerTokenAutoLoginHandler) {
-					if (!invocation.getWebApiRuntime().getMetaData().isSupportBearerToken()) {
-						return;
-					}
-				}
-				
 				AutoLoginInstruction inst = alh.handle(invocation.getRequest(), true, user);
 				switch (inst.getInstruction()) {
 				case DO_AUTH:
 					try {
 						authService.login(inst.getCredential());
 						alh.handleSuccess(inst, invocation.getRequest(), authService.getCurrentSessionUserContext());
+						responseToken(invocation);
 					} catch (ApplicationException e) {
 						Exception he = alh.handleException(inst, e, invocation.getRequest(), true, user);
 						if (he != null) {
@@ -161,12 +126,6 @@ public class AuthInterceptor implements CommandInterceptor {
 			for (AuthenticationProvider ap: authService.getAuthenticationProviders()) {
 				AutoLoginHandler autoLoginHandler = ap.getAutoLoginHandler();
 				if (autoLoginHandler != null) {
-					//TODO BearerTokenAutoLoginHandlerを参照してしまう。。
-					if (autoLoginHandler instanceof BearerTokenAutoLoginHandler) {
-						if (!invocation.getWebApiRuntime().getMetaData().isSupportBearerToken()) {
-							continue;
-						}
-					}
 					
 					AutoLoginInstruction inst = autoLoginHandler.handle(invocation.getRequest(), false, null);
 					switch (inst.getInstruction()) {
@@ -174,6 +133,7 @@ public class AuthInterceptor implements CommandInterceptor {
 						try {
 							authService.login(inst.getCredential());
 							autoLoginHandler.handleSuccess(inst, invocation.getRequest(), authService.getCurrentSessionUserContext());
+							responseToken(invocation);
 							return;
 						} catch (ApplicationException e) {
 							Exception he = autoLoginHandler.handleException(inst, e, invocation.getRequest(), false, null);
@@ -213,13 +173,22 @@ public class AuthInterceptor implements CommandInterceptor {
 			}
 		}
 	}
+
+	private void responseToken(WebApiInvocationImpl invocation) {
+		if (!sessionService.isSessionStateless()) {
+			//transaction token を返却
+			String token = TokenStore.getFixedToken(invocation.getRequest().getSession());
+			ResponseHeader res = (ResponseHeader) invocation.getRequest().getAttribute(WebRequestConstants.RESPONSE_HEADER);
+			res.setHeader(TokenStore.TOKEN_HEADER_NAME, token);
+		}
+	}
 	
 	@Override
 	public String intercept(CommandInvocation invocation) {
 		WebApiInvocationImpl webApiInvocation = (WebApiInvocationImpl) invocation;
 
 		//AutoLogin processing
-		processAutoLogin(webApiInvocation, authService);
+		processAutoLogin(webApiInvocation);
 		
 		AuthContextHolder account = getAuthContextHolder(webApiInvocation.getWebApiRuntime());
 

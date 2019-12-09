@@ -18,7 +18,6 @@
  along with this program. If not, see <https://www.gnu.org/licenses/>.
  --%>
 
-<%@page import="org.iplass.gem.command.generic.reftree.SearchTreeDataCommand"%>
 <%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core"%>
 <%@ taglib prefix="m" uri="http://iplass.org/tags/mtp"%>
 <%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8" trimDirectiveWhitespaces="true"%>
@@ -48,11 +47,14 @@
 <%@ page import="org.iplass.mtp.view.generic.editor.ReferencePropertyEditor.ReferenceDisplayType" %>
 <%@ page import="org.iplass.mtp.web.template.TemplateUtil" %>
 <%@ page import="org.iplass.mtp.ManagerLocator" %>
+<%@ page import="org.iplass.mtp.impl.util.ConvertUtil" %>
 <%@ page import="org.iplass.gem.command.generic.detail.DetailViewCommand"%>
 <%@ page import="org.iplass.gem.command.generic.reflink.GetReferenceLinkItemCommand"%>
 <%@ page import="org.iplass.gem.command.generic.refcombo.GetEditorCommand"%>
 <%@ page import="org.iplass.gem.command.generic.refcombo.ReferenceComboCommand"%>
 <%@ page import="org.iplass.gem.command.generic.refcombo.SearchParentCommand"%>
+<%@ page import="org.iplass.gem.command.generic.reftree.SearchTreeDataCommand"%>
+<%@ page import="org.iplass.gem.command.generic.refunique.GetReferenceUniqueItemCommand"%>
 <%@ page import="org.iplass.gem.command.generic.search.SearchViewCommand"%>
 <%@ page import="org.iplass.gem.command.Constants" %>
 <%@ page import="org.iplass.gem.command.CommandUtil" %>
@@ -191,7 +193,12 @@
 		if (doSearch) {
 			Query q = new Query();
 			q.from(editor.getObjectName());
-			q.select(Entity.OID, Entity.NAME, Entity.VERSION);
+			q.select(Entity.OID, Entity.VERSION);
+			if (editor.getDisplayLabelItem() != null) {
+				q.select().add(editor.getDisplayLabelItem());
+			} else {
+				q.select().add(Entity.NAME);
+			}
 			if (condition != null) {
 				q.where(condition);
 			}
@@ -228,6 +235,36 @@
 
 		return TemplateUtil.getMultilingualString(fv.getTitle(), fv.getLocalizedTitleList(), ed.getDisplayName(), ed.getLocalizedDisplayNameList());
 	}
+
+	String getDisplayPropLabel(ReferencePropertyEditor editor, Entity refEntity) {
+		String displayPropName = editor.getDisplayLabelItem();
+		if (displayPropName == null) {
+			displayPropName = Entity.NAME;
+		}
+		return refEntity.getValue(displayPropName);
+	}
+
+	boolean isUniqueProp(ReferencePropertyEditor editor) {
+		if (editor.getDisplayType() == ReferenceDisplayType.UNIQUE && editor.getUniqueItem() != null) {
+			// OIDをユニークキーフィールドとして使えるように
+			if (Entity.OID.equals(editor.getUniqueItem())) return true;
+
+			EntityDefinition ed = ManagerLocator.getInstance().getManager(EntityDefinitionManager.class).get(editor.getObjectName());
+			PropertyDefinition pd = ed.getProperty(editor.getUniqueItem());
+			if (pd.getIndexType() == IndexType.UNIQUE || pd.getIndexType() == IndexType.UNIQUE_WITHOUT_NULL) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	String getUniquePropValue(ReferencePropertyEditor editor, Entity refEntity) {
+		String uniquePropName = editor.getUniqueItem();
+		if (uniquePropName == null || refEntity.getValue(uniquePropName) == null) return "";
+		// FIXME ユニークキー項目のプロパティエディター定義が存在しないので、文字列に変換して問題ないかな。。
+		String str = ConvertUtil.convertToString(refEntity.getValue(uniquePropName));
+		return StringUtil.escapeHtml(str);
+	}
 %>
 <%
 	ReferencePropertyEditor editor = (ReferencePropertyEditor) request.getAttribute(Constants.EDITOR_EDITOR);
@@ -240,8 +277,10 @@
 	if (required == null) required = false;
 	@SuppressWarnings("unchecked") HashMap<String, Object> defaultSearchCond = (HashMap<String, Object>) request.getAttribute(Constants.DEFAULT_SEARCH_COND);
 
-	String viewName = request.getParameter(Constants.VIEW_NAME);
+	String viewName = (String)request.getAttribute(Constants.VIEW_NAME);
+	if (viewName == null) viewName = "";
 	String searchCond = request.getParameter(Constants.SEARCH_COND);
+	String defName = request.getParameter(Constants.DEF_NAME);
 
 
 	String propName = Constants.SEARCH_COND_PREFIX + editor.getPropertyName();
@@ -318,8 +357,9 @@ data-upperType="<c:out value="<%=upperType %>"/>"
 			for (Entity ref : entityList) {
 				String selected = "";
 				if (value.equals(ref.getOid())) selected = " selected";
+				String displayPropLabel = getDisplayPropLabel(editor, ref);
 %>
-<option value="<c:out value="<%=ref.getOid() %>"/>" <%=selected %>><c:out value="<%=ref.getName() %>" /></option>
+<option value="<c:out value="<%=ref.getOid() %>"/>" <%=selected %>><c:out value="<%=displayPropLabel %>" /></option>
 <%
 			}
 %>
@@ -332,9 +372,10 @@ data-upperType="<c:out value="<%=upperType %>"/>"
 <%
 			for (Entity ref : entityList) {
 				String selected = "";
+				String displayPropLabel = getDisplayPropLabel(editor, ref);
 				if (value.equals(ref.getOid())) selected = " selected";
 %>
-<option value="<c:out value="<%=ref.getOid() %>"/>" <%=selected %>><c:out value="<%=ref.getName() %>" /></option>
+<option value="<c:out value="<%=ref.getOid() %>"/>" <%=selected %>><c:out value="<%=displayPropLabel %>" /></option>
 <%
 			}
 %>
@@ -356,7 +397,7 @@ $(function() {
 	addNormalValidator(function() {
 		var val = $("select[name='" + es("<%=StringUtil.escapeJavaScript(propName)%>") + "']").val();
 		if (typeof val === "undefined" || val == null || val == "") {
-			alert(scriptContext.locale.requiredMsg.replace("{0}", "<%=StringUtil.escapeJavaScript(displayLabel)%>"));
+			alert(scriptContext.gem.locale.common.requiredMsg.replace("{0}", "<%=StringUtil.escapeJavaScript(displayLabel)%>"));
 			return false;
 		}
 		return true;
@@ -384,7 +425,12 @@ $(function() {
 
 		Query q = new Query();
 		q.from(editor.getObjectName());
-		q.select(Entity.OID, Entity.NAME);
+		q.select(Entity.OID);
+		if (editor.getDisplayLabelItem() != null) {
+			q.select().add(editor.getDisplayLabelItem());
+		} else {
+			q.select().add(Entity.NAME);
+		}
 		if (condition != null) {
 			q.where(condition);
 		}
@@ -405,9 +451,10 @@ $(function() {
 		for (Entity ref : entityList) {
 			String checked = "";
 			if (oids.contains(ref.getOid())) checked = " checked";
+			String displayPropLabel = getDisplayPropLabel(editor, ref);
 %>
-<li><label style="<c:out value="<%=customStyle%>"/>" title="<c:out value="<%=ref.getName() %>" />">
-<input type="checkbox" name="<c:out value="<%=propName %>"/>" value="<c:out value="<%=ref.getOid() %>"/>" <%=checked %>/><c:out value="<%=ref.getName() %>" />
+<li><label style="<c:out value="<%=customStyle%>"/>" title="<c:out value="<%=displayPropLabel %>" />">
+<input type="checkbox" name="<c:out value="<%=propName %>"/>" value="<c:out value="<%=ref.getOid() %>"/>" <%=checked %>/><c:out value="<%=displayPropLabel %>" />
 </label></li>
 <%
 		}
@@ -438,7 +485,7 @@ $(function() {
 	addNormalValidator(function() {
 		var val = $(":checkbox[name='" + es("<%=StringUtil.escapeJavaScript(propName)%>") + "']:checked").val();
 		if (typeof val === "undefined" || val == null || val == "") {
-			alert(scriptContext.locale.requiredMsg.replace("{0}", "<%=StringUtil.escapeJavaScript(displayLabel)%>"));
+			alert(scriptContext.gem.locale.common.requiredMsg.replace("{0}", "<%=StringUtil.escapeJavaScript(displayLabel)%>"));
 			return false;
 		}
 		return true;
@@ -520,7 +567,7 @@ $(function() {
 	addNormalValidator(function() {
 		var val = $("select[name='" + es("<%=StringUtil.escapeJavaScript(propName)%>") + "']").val();
 		if (typeof val === "undefined" || val == null || val == "") {
-			alert(scriptContext.locale.requiredMsg.replace("{0}", "<%=StringUtil.escapeJavaScript(displayLabel)%>"));
+			alert(scriptContext.gem.locale.common.requiredMsg.replace("{0}", "<%=StringUtil.escapeJavaScript(displayLabel)%>"));
 			return false;
 		}
 		return true;
@@ -534,6 +581,9 @@ $(function() {
 	} else if (editor.getDisplayType() == ReferenceDisplayType.LINK && editor.isUseSearchDialog()) {
 		String _defName = editor.getObjectName();
 		String _viewName = editor.getViewName() != null ? editor.getViewName() : "";
+
+		if (viewName == null) viewName = "";
+		else viewName = StringUtil.escapeHtml(viewName);
 
 		String contextPath = TemplateUtil.getTenantContextPath();
 		String urlPath = ViewUtil.getParamMappingPath(_defName, _viewName);
@@ -569,13 +619,14 @@ $(function() {
 			for (int i = 0; i < propValue.length; i++) {
 				String oid = propValue[i];
 				Entity entity = em.load(oid, _defName);
-				if (entity == null || entity.getName() == null) continue;
+				if (entity == null || getDisplayPropLabel(editor, entity) == null) continue;
+				String displayPropLabel = getDisplayPropLabel(editor, entity);
 				String liId = "li_" + propName + i;
 				String linkId = propName + "_" + entity.getOid();
 				String key = entity.getOid() + "_" + entity.getVersion();
 %>
 <li id="<c:out value="<%=liId %>"/>" class="list-add">
-<a href="javascript:void(0)" class="modal-lnk"id="<c:out value="<%=linkId %>"/>" style="<c:out value="<%=customStyle%>"/>" onclick="showReference('<%=StringUtil.escapeJavaScript(view)%>', '<%=StringUtil.escapeJavaScript(_defName)%>', '<%=StringUtil.escapeJavaScript(entity.getOid())%>', '<%=entity.getVersion() %>', '<%=StringUtil.escapeJavaScript(linkId)%>', false)"><c:out value="<%=entity.getName() %>" /></a>
+<a href="javascript:void(0)" class="modal-lnk" id="<c:out value="<%=linkId %>" />" data-linkId="<c:out value="<%=linkId %>"/>" style="<c:out value="<%=customStyle%>"/>" onclick="showReference('<%=StringUtil.escapeJavaScript(view)%>', '<%=StringUtil.escapeJavaScript(_defName)%>', '<%=StringUtil.escapeJavaScript(entity.getOid())%>', '<%=entity.getVersion() %>', '<%=StringUtil.escapeJavaScript(linkId)%>', false)"><c:out value="<%=displayPropLabel %>" /></a>
 <input type="button" value="${m:rs('mtp-gem-messages', 'generic.editor.reference.ReferencePropertyEditor_Edit.delete')}" class="gr-btn-02 del-btn" onclick="deleteItem('<%=StringUtil.escapeJavaScript(liId)%>')" />
 <input type="hidden" name="<c:out value="<%=propName %>"/>" value="<c:out value="<%=key %>"/>"/>
 </li>
@@ -591,14 +642,15 @@ $(function() {
 					int index = kv[1].lastIndexOf("_");
 					String oid = kv[1].substring(0, index);
 					Entity entity = em.load(oid,_defName);
-					if (entity == null || entity.getName() == null) continue;
+					if (entity == null || getDisplayPropLabel(editor, entity) == null) continue;
+					String displayPropLabel = getDisplayPropLabel(editor, entity);
 					String liId = "li_" + propName + i;
 					String linkId = propName + "_" + entity.getOid();
 					String key = entity.getOid() + "_" + entity.getVersion();
 					//hiddenにjavascriptで値上書きしないようにnorewrite属性をつけておく
 %>
 <li id="<c:out value="<%=liId %>"/>" class="list-add">
-<a href="javascript:void(0)" class="modal-lnk"id="<c:out value="<%=linkId %>"/>" style="<c:out value="<%=customStyle%>"/>" onclick="showReference('<%=StringUtil.escapeJavaScript(view)%>', '<%=StringUtil.escapeJavaScript(_defName)%>', '<%=StringUtil.escapeJavaScript(entity.getOid())%>', '<%=entity.getVersion() %>', '<%=StringUtil.escapeJavaScript(linkId)%>', false)"><c:out value="<%=entity.getName() %>" /></a>
+<a href="javascript:void(0)" class="modal-lnk" id="<c:out value="<%=linkId %>" />" data-linkId="<c:out value="<%=linkId %>"/>" style="<c:out value="<%=customStyle%>"/>" onclick="showReference('<%=StringUtil.escapeJavaScript(view)%>', '<%=StringUtil.escapeJavaScript(_defName)%>', '<%=StringUtil.escapeJavaScript(entity.getOid())%>', '<%=entity.getVersion() %>', '<%=StringUtil.escapeJavaScript(linkId)%>', false)"><c:out value="<%=displayPropLabel %>" /></a>
 <input type="button" value="${m:rs('mtp-gem-messages', 'generic.editor.reference.ReferencePropertyEditor_Edit.delete')}" class="gr-btn-02 del-btn" onclick="deleteItem('<%=StringUtil.escapeJavaScript(liId)%>')" />
 <input type="hidden" name="<c:out value="<%=propName %>"/>" value="<c:out value="<%=key %>"/>" data-norewrite="true"/>
 </li>
@@ -624,6 +676,9 @@ $(function() {
 		, refEdit: false
 		, viewName: "<%=StringUtil.escapeJavaScript(_viewName) %>"
 		, permitConditionSelectAll: <%=editor.isPermitConditionSelectAll()%>
+		, parentDefName: "<%=StringUtil.escapeJavaScript(defName)%>"
+		, parentViewName: "<%=StringUtil.escapeJavaScript(viewName)%>"
+		, viewType: "<%=Constants.VIEW_TYPE_SEARCH %>"
 	}
 	var $selBtn = $(":button[id='<%=StringUtil.escapeJavaScript(selBtnId)%>']");
 	for (key in params) {
@@ -631,7 +686,7 @@ $(function() {
 	}
 	$selBtn.on("click", function() {
 		searchReference(params.selectAction, params.viewAction, params.defName, params.propName, params.multiplicity, <%=isMultiple%>,
-				 params.urlParam, params.refEdit, function(){}, null, params.viewName, params.permitConditionSelectAll);
+				 params.urlParam, params.refEdit, function(){}, null, params.viewName, params.permitConditionSelectAll, params.parentDefName, params.parentViewName, params.viewType);
 	});
 
 	<%-- common.js --%>
@@ -650,10 +705,11 @@ $(function() {
 <%			for (int i = 0; i < defaultValue.length; i++) {
 				String oid = defaultValue[i];
 				Entity entity = em.load(oid, _defName);
-				if (entity == null || entity.getName() == null) continue;
+				if (entity == null || getDisplayPropLabel(editor, entity) == null) continue;
+				String displayPropLabel = getDisplayPropLabel(editor, entity);
 
 				String liId = StringUtil.escapeJavaScript("li_" + propName + i);
-				String label = StringUtil.escapeJavaScript(entity.getName());
+				String label = StringUtil.escapeJavaScript(displayPropLabel);
 				String key = StringUtil.escapeJavaScript(entity.getOid() + "_" + entity.getVersion());
 %>
 		<%-- common.js --%>
@@ -671,7 +727,7 @@ $(function() {
 	addNormalValidator(function() {
 		var $ul = $("#" + es("<%=StringUtil.escapeJavaScript(ulId)%>"));
 		if ($ul.children().length == 0) {
-			alert(scriptContext.locale.requiredMsg.replace("{0}", "<%=StringUtil.escapeJavaScript(displayLabel)%>"));
+			alert(scriptContext.gem.locale.common.requiredMsg.replace("{0}", "<%=StringUtil.escapeJavaScript(displayLabel)%>"));
 			return false;
 		}
 		return true;
@@ -704,13 +760,14 @@ $(function() {
 			for (int i = 0; i < propValue.length; i++) {
 				String oid = propValue[i];
 				Entity entity = em.load(oid, rp.getObjectDefinitionName());
-				if (entity == null || entity.getName() == null) continue;
+				if (entity == null || getDisplayPropLabel(editor, entity) == null) continue;
 				String liId = "li_" + propName + i;
 				String linkId = propName + "_" + entity.getOid();
 				String key = entity.getOid() + "_" + entity.getVersion();
+				String displayPropLabel = getDisplayPropLabel(editor, entity);
 %>
 <li id="<c:out value="<%=liId %>"/>" class="list-add">
-<a href="javascript:void(0)" class="modal-lnk"id="<c:out value="<%=linkId %>"/>" style="<c:out value="<%=customStyle%>"/>" onclick="showReference('<%=StringUtil.escapeJavaScript(view)%>', '<%=StringUtil.escapeJavaScript(rp.getObjectDefinitionName())%>', '<%=StringUtil.escapeJavaScript(entity.getOid())%>', '<%=entity.getVersion() %>', '<%=StringUtil.escapeJavaScript(linkId)%>', false)"><c:out value="<%=entity.getName() %>" /></a>
+<a href="javascript:void(0)" class="modal-lnk" id="<c:out value="<%=linkId %>" />" data-linkId="<c:out value="<%=linkId %>"/>" style="<c:out value="<%=customStyle%>"/>" onclick="showReference('<%=StringUtil.escapeJavaScript(view)%>', '<%=StringUtil.escapeJavaScript(rp.getObjectDefinitionName())%>', '<%=StringUtil.escapeJavaScript(entity.getOid())%>', '<%=entity.getVersion() %>', '<%=StringUtil.escapeJavaScript(linkId)%>', false)"><c:out value="<%=displayPropLabel %>" /></a>
 <input type="button" value="${m:rs('mtp-gem-messages', 'generic.editor.reference.ReferencePropertyEditor_Edit.delete')}" class="gr-btn-02 del-btn" onclick="deleteItem('<%=StringUtil.escapeJavaScript(liId)%>')" />
 <input type="hidden" name="<c:out value="<%=propName %>"/>" value="<c:out value="<%=key %>"/>"/>
 </li>
@@ -726,14 +783,15 @@ $(function() {
 					int index = kv[1].lastIndexOf("_");
 					String oid = kv[1].substring(0, index);
 					Entity entity = em.load(oid, rp.getObjectDefinitionName());
-					if (entity == null || entity.getName() == null) continue;
+					if (entity == null || getDisplayPropLabel(editor, entity) == null) continue;
 					String liId = "li_" + propName + i;
 					String linkId = propName + "_" + entity.getOid();
 					String key = entity.getOid() + "_" + entity.getVersion();
+					String displayPropLabel = getDisplayPropLabel(editor, entity);
 					//hiddenにjavascriptで値上書きしないようにnorewrite属性をつけておく
 %>
 <li id="<c:out value="<%=liId %>"/>" class="list-add">
-<a href="javascript:void(0)" class="modal-lnk"id="<c:out value="<%=linkId %>"/>" style="<c:out value="<%=customStyle%>"/>" onclick="showReference('<%=StringUtil.escapeJavaScript(view)%>', '<%=StringUtil.escapeJavaScript(rp.getObjectDefinitionName())%>', '<%=StringUtil.escapeJavaScript(entity.getOid())%>', '<%=entity.getVersion() %>', '<%=StringUtil.escapeJavaScript(linkId)%>', false)"><c:out value="<%=entity.getName() %>" /></a>
+<a href="javascript:void(0)" class="modal-lnk" id="<c:out value="<%=linkId %>" />" data-linkId="<c:out value="<%=linkId %>"/>" style="<c:out value="<%=customStyle%>"/>" onclick="showReference('<%=StringUtil.escapeJavaScript(view)%>', '<%=StringUtil.escapeJavaScript(rp.getObjectDefinitionName())%>', '<%=StringUtil.escapeJavaScript(entity.getOid())%>', '<%=entity.getVersion() %>', '<%=StringUtil.escapeJavaScript(linkId)%>', false)"><c:out value="<%=displayPropLabel %>" /></a>
 <input type="button" value="${m:rs('mtp-gem-messages', 'generic.editor.reference.ReferencePropertyEditor_Edit.delete')}" class="gr-btn-02 del-btn" onclick="deleteItem('<%=StringUtil.escapeJavaScript(liId)%>')" />
 <input type="hidden" name="<c:out value="<%=propName %>"/>" value="<c:out value="<%=key %>"/>" data-norewrite="true"/>
 </li>
@@ -798,13 +856,13 @@ $(function() {
 <%			for (int i = 0; i < defaultValue.length; i++) {
 				String oid = defaultValue[i];
 				Entity entity = em.load(oid, rp.getObjectDefinitionName());
-				if (entity == null || entity.getName() == null) continue;
+				if (entity == null || getDisplayPropLabel(editor, entity) == null) continue;
 
 				String liId = StringUtil.escapeJavaScript("li_" + propName + i);
 				String viewAction = StringUtil.escapeJavaScript(view);
 				String _defName = StringUtil.escapeJavaScript(rp.getObjectDefinitionName());
 				String key = StringUtil.escapeJavaScript(entity.getOid() + "_" + entity.getVersion());
-				String label = StringUtil.escapeJavaScript(entity.getName());
+				String label = StringUtil.escapeJavaScript(getDisplayPropLabel(editor, entity));
 				String _propName = StringUtil.escapeJavaScript(propName);
 %>
 		<%-- common.js --%>
@@ -822,7 +880,282 @@ $(function() {
 	addNormalValidator(function() {
 		var $ul = $("#" + es("<%=StringUtil.escapeJavaScript(ulId)%>"));
 		if ($ul.children().length == 0) {
-			alert(scriptContext.locale.requiredMsg.replace("{0}", "<%=StringUtil.escapeJavaScript(displayLabel)%>"));
+			alert(scriptContext.gem.locale.common.requiredMsg.replace("{0}", "<%=StringUtil.escapeJavaScript(displayLabel)%>"));
+			return false;
+		}
+		return true;
+	});
+<%
+		}
+%>
+});
+</script>
+<%
+	} else if (editor.getDisplayType() == ReferenceDisplayType.UNIQUE && isUniqueProp(editor) && editor.isUseSearchDialog()) {
+
+		String _defName = editor.getObjectName();
+		String _viewName = editor.getViewName() != null ? editor.getViewName() : "";
+
+		if (viewName == null) viewName = "";
+		else viewName = StringUtil.escapeHtml(viewName);
+
+		String contextPath = TemplateUtil.getTenantContextPath();
+		String urlPath = ViewUtil.getParamMappingPath(_defName, _viewName);
+
+		//選択ボタン
+		String select = "";
+		if (StringUtil.isNotBlank(editor.getSelectActionName())) {
+			select = contextPath + "/" + editor.getSelectActionName() + urlPath;
+		} else {
+			select = contextPath + "/" + SearchViewCommand.SELECT_ACTION_NAME + urlPath;
+		}
+
+		//詳細編集でのリンククリック
+		String view = "";
+		if (StringUtil.isNotBlank(editor.getViewrefActionName())) {
+			view = contextPath + "/" + editor.getViewrefActionName() + urlPath;
+		} else {
+			view = contextPath + "/" + DetailViewCommand.REF_VIEW_ACTION_NAME + urlPath;
+		}
+
+		String urlParam = "";
+		if (StringUtil.isNotBlank(editor.getUrlParameterScriptKey())) {
+			urlParam = ManagerLocator.getInstance().getManager(EntityViewManager.class).getUrlParameter(rootDefName, editor.getUrlParameterScriptKey(), null);
+		}
+
+		String ulId = "ul_" + propName;
+%>
+<ul id="<c:out value="<%=ulId %>"/>" data-deletable="true" class="mb05">
+<%
+		int length = 0;
+		//デフォルト検索条件からリンク作成(searchCondがnull出ない場合は設定されてこない)
+		String[] propValue = (String[]) request.getAttribute(Constants.EDITOR_PROP_VALUE);
+		if (propValue != null && propValue.length > 0) {
+			for (int i = 0; i < propValue.length; i++) {
+				String oid = propValue[i];
+				Entity entity = em.load(oid, _defName);
+				if (entity == null || getDisplayPropLabel(editor, entity) == null) continue;
+				String displayPropLabel = getDisplayPropLabel(editor, entity);
+				String uniquePropValue = getUniquePropValue(editor, entity);
+				String liId = "li_" + propName + i;
+				String linkId = propName + "_" + entity.getOid();
+				String key = entity.getOid() + "_" + entity.getVersion();
+%>
+<li id="<c:out value="<%=liId %>"/>" class="list-add unique-list refUnique"
+ data-defName="<c:out value="<%=rootDefName%>"/>"
+ data-viewType="<c:out value="<%=Constants.VIEW_TYPE_SEARCH%>"/>"
+ data-viewName="<c:out value="<%=viewName%>"/>"
+ data-propName="<c:out value="<%=propName%>"/>"
+ data-webapiName="<%=GetReferenceUniqueItemCommand.WEBAPI_NAME%>"
+ data-selectAction="<c:out value="<%=select %>"/>"
+ data-viewAction="<c:out value="<%=view %>"/>"
+ data-urlParam="<c:out value="<%=urlParam %>"/>"
+ data-refDefName="<c:out value="<%=rp.getObjectDefinitionName()%>"/>"
+ data-refViewName="<c:out value="<%=_viewName%>"/>"
+ data-refEdit="<c:out value="false"/>"
+ data-permitConditionSelectAll="<c:out value="<%=editor.isPermitConditionSelectAll()%>"/>"
+ data-multiplicity="-1"
+>
+<span class="unique-key">
+<input type="text" id="uniq_txt_<c:out value="<%=liId%>"/>" style="<c:out value="<%=customStyle%>"/>" class="unique-form-size-01 inpbr" value="<c:out value="<%=uniquePropValue %>" />" />
+<input type="button" value="${m:rs('mtp-gem-messages', 'generic.editor.reference.ReferencePropertyEditor_Edit.select')}" class="gr-btn-02 modal-btn sel-btn" data-propName="<c:out value="<%=propName %>"/>" />
+</span>
+<span class="unique-ref">
+<a href="javascript:void(0)" class="modal-lnk" id="<c:out value="<%=linkId %>" />" data-linkId="<c:out value="<%=linkId %>"/>" onclick="showReference('<%=StringUtil.escapeJavaScript(view)%>', '<%=StringUtil.escapeJavaScript(_defName)%>', '<%=StringUtil.escapeJavaScript(entity.getOid())%>', '<%=entity.getVersion() %>', '<%=StringUtil.escapeJavaScript(linkId)%>', false)"><c:out value="<%=displayPropLabel %>" /></a>
+<input type="button" value="${m:rs('mtp-gem-messages', 'generic.editor.reference.ReferencePropertyEditor_Edit.delete')}" class="gr-btn-02 del-btn" onclick="deleteItem('<%=StringUtil.escapeJavaScript(liId)%>')"/>
+</span>
+<input type="hidden" id="i_<c:out value="<%=liId%>"/>" name="<c:out value="<%=propName %>"/>" value="<c:out value="<%=key %>"/>"/>
+</li>
+<%
+				length++;
+			}
+		}
+		//searchCondを解析してリンク作成
+		if (searchCond != null && searchCond.contains(propName)) {
+			length = 0;
+			String[] params  = searchCond.split("&");
+			for (int i = 0; i < params.length; i++) {
+				String[] kv = params[i].split("=");
+				if (kv.length > 1 && kv[0].equals(propName)) {
+					int index = kv[1].lastIndexOf("_");
+					String oid = kv[1].substring(0, index);
+					Entity entity = em.load(oid,_defName);
+					if (entity == null || getDisplayPropLabel(editor, entity) == null) continue;
+					String displayPropLabel = getDisplayPropLabel(editor, entity);
+					String uniquePropValue = getUniquePropValue(editor, entity);
+					String liId = "li_" + propName + i;
+					String linkId = propName + "_" + entity.getOid();
+					String key = entity.getOid() + "_" + entity.getVersion();
+					//hiddenにjavascriptで値上書きしないようにnorewrite属性をつけておく
+%>
+<li id="<c:out value="<%=liId %>"/>" class="list-add unique-list refUnique"
+ data-defName="<c:out value="<%=rootDefName%>"/>"
+ data-viewType="<c:out value="<%=Constants.VIEW_TYPE_SEARCH%>"/>"
+ data-viewName="<c:out value="<%=viewName%>"/>"
+ data-propName="<c:out value="<%=propName%>"/>"
+ data-webapiName="<%=GetReferenceUniqueItemCommand.WEBAPI_NAME%>"
+ data-selectAction="<c:out value="<%=select %>"/>"
+ data-viewAction="<c:out value="<%=view %>"/>"
+ data-urlParam="<c:out value="<%=urlParam %>"/>"
+ data-refDefName="<c:out value="<%=rp.getObjectDefinitionName()%>"/>"
+ data-refViewName="<c:out value="<%=_viewName%>"/>"
+ data-refEdit="<c:out value="false"/>"
+ data-permitConditionSelectAll="<c:out value="<%=editor.isPermitConditionSelectAll()%>"/>"
+ data-multiplicity="-1"
+>
+<span class="unique-key">
+<input type="text" id="uniq_txt_<c:out value="<%=liId%>"/>" style="<c:out value="<%=customStyle%>"/>" class="unique-form-size-01 inpbr" value="<c:out value="<%=uniquePropValue %>" />" />
+<input type="button" value="${m:rs('mtp-gem-messages', 'generic.editor.reference.ReferencePropertyEditor_Edit.select')}" class="gr-btn-02 modal-btn sel-btn" data-propName="<c:out value="<%=propName %>"/>" />
+</span>
+<span class="unique-ref">
+<a href="javascript:void(0)" class="modal-lnk" id="<c:out value="<%=linkId %>" />" data-linkId="<c:out value="<%=linkId %>"/>" onclick="showReference('<%=StringUtil.escapeJavaScript(view)%>', '<%=StringUtil.escapeJavaScript(_defName)%>', '<%=StringUtil.escapeJavaScript(entity.getOid())%>', '<%=entity.getVersion() %>', '<%=StringUtil.escapeJavaScript(linkId)%>', false)"><c:out value="<%=displayPropLabel %>" /></a>
+<input type="button" value="${m:rs('mtp-gem-messages', 'generic.editor.reference.ReferencePropertyEditor_Edit.delete')}" class="gr-btn-02 del-btn" onclick="deleteItem('<%=StringUtil.escapeJavaScript(liId)%>')"/>
+</span>
+<input type="hidden" id="i_<c:out value="<%=liId%>"/>" name="<c:out value="<%=propName %>"/>" value="<c:out value="<%=key %>"/>" data-norewrite="true" />
+</li>
+<%
+					length++;
+				}
+			}
+		}
+
+		if (length == 0) {
+			String liId = "li_" + propName + "0";
+%>
+<li id="<c:out value="<%=liId %>"/>" class="list-add unique-list refUnique"
+ data-defName="<c:out value="<%=rootDefName%>"/>"
+ data-viewType="<c:out value="<%=Constants.VIEW_TYPE_SEARCH%>"/>"
+ data-viewName="<c:out value="<%=viewName%>"/>"
+ data-propName="<c:out value="<%=propName%>"/>"
+ data-webapiName="<%=GetReferenceUniqueItemCommand.WEBAPI_NAME%>"
+ data-selectAction="<c:out value="<%=select %>"/>"
+ data-viewAction="<c:out value="<%=view %>"/>"
+ data-urlParam="<c:out value="<%=urlParam %>"/>"
+ data-refDefName="<c:out value="<%=rp.getObjectDefinitionName()%>"/>"
+ data-refViewName="<c:out value="<%=_viewName%>"/>"
+ data-refEdit="<c:out value="false"/>"
+ data-permitConditionSelectAll="<c:out value="<%=editor.isPermitConditionSelectAll()%>"/>"
+ data-multiplicity="-1"
+>
+<span class="unique-key">
+<input type="text" id="uniq_txt_<c:out value="<%=liId%>"/>" style="<c:out value="<%=customStyle%>"/>" class="unique-form-size-01 inpbr" value="" />
+<input type="button" value="${m:rs('mtp-gem-messages', 'generic.editor.reference.ReferencePropertyEditor_Edit.select')}" class="gr-btn-02 modal-btn sel-btn" data-propName="<c:out value="<%=propName %>"/>" />
+</span>
+<span class="unique-ref">
+<a href="javascript:void(0)" class="modal-lnk" ></a>
+<%
+			if (isMultiple) {
+%>
+<input type="button" value="${m:rs('mtp-gem-messages', 'generic.editor.reference.ReferencePropertyEditor_Edit.delete')}" class="gr-btn-02 del-btn" onclick="deleteItem('<%=StringUtil.escapeJavaScript(liId)%>')"/>
+<%
+			} else {
+%>
+<input type="button" value="${m:rs('mtp-gem-messages', 'generic.editor.reference.ReferencePropertyEditor_Edit.delete')}" class="gr-btn-02 del-btn"/>
+<%
+			}
+%>
+</span>
+<input type="hidden" id="i_<c:out value="<%=liId%>"/>" name="<c:out value="<%=propName %>"/>" value=""/>
+</li>
+<%
+			length++;
+		}
+
+		String dummyRowId = "id_li_" + propName + "Dummmy";
+%>
+<li id="<c:out value="<%=dummyRowId %>"/>" class="list-add unique-list" style="display: none;"
+ data-defName="<c:out value="<%=rootDefName%>"/>"
+ data-viewType="<c:out value="<%=Constants.VIEW_TYPE_SEARCH%>"/>"
+ data-viewName="<c:out value="<%=viewName%>"/>"
+ data-propName="<c:out value="<%=propName%>"/>"
+ data-webapiName="<%=GetReferenceUniqueItemCommand.WEBAPI_NAME%>"
+ data-selectAction="<c:out value="<%=select %>"/>"
+ data-viewAction="<c:out value="<%=view %>"/>"
+ data-urlParam="<c:out value="<%=urlParam %>"/>"
+ data-refDefName="<c:out value="<%=rp.getObjectDefinitionName()%>"/>"
+ data-refViewName="<c:out value="<%=_viewName%>"/>"
+ data-refEdit="<c:out value="false"/>"
+ data-permitConditionSelectAll="<c:out value="<%=editor.isPermitConditionSelectAll()%>"/>"
+ data-multiplicity="-1"
+>
+<span class="unique-key">
+<input type="text" style="<c:out value="<%=customStyle%>"/>" class="unique-form-size-01 inpbr" />
+<input type="button" value="${m:rs('mtp-gem-messages', 'generic.editor.reference.ReferencePropertyEditor_Edit.select')}" class="gr-btn-02 modal-btn sel-btn" data-propName="<c:out value="<%=propName %>"/>" />
+</span>
+<span class="unique-ref">
+<a href="javascript:void(0)" class="modal-lnk"></a>
+<input type="button" value="${m:rs('mtp-gem-messages', 'generic.editor.reference.ReferencePropertyEditor_Edit.delete')}" class="gr-btn-02 del-btn" />
+</span>
+<input type="hidden"/>
+</li>
+</ul>
+<%
+		if (isMultiple) {
+// 			String selBtnId = "sel_btn_" + propName;
+%>
+<%-- <input type="button" value="${m:rs('mtp-gem-messages', 'generic.editor.reference.ReferencePropertyEditor_Edit.select')}" class="gr-btn-02 modal-btn" id="<c:out value="<%=selBtnId %>"/>" /> --%>
+<input type="button" id="id_addBtn_<c:out value="<%=propName%>"/>" value="${m:rs('mtp-gem-messages', 'generic.editor.reference.ReferencePropertyEditor_Edit.add')}" class="gr-btn-02 add-btn" onclick="addUniqueRefItem('<%=StringUtil.escapeJavaScript(ulId)%>', -1, '<%=StringUtil.escapeJavaScript(dummyRowId)%>', '<%=StringUtil.escapeJavaScript(propName)%>', 'id_count_<%=StringUtil.escapeJavaScript(propName)%>')" />
+<%
+		}
+%>
+<input type="hidden" id="id_count_<c:out value="<%=propName%>"/>" value="<c:out value="<%=length%>"/>" />
+<script type="text/javascript">
+$(function() {
+	<%-- common.js --%>
+	addNormalConditionItemResetHandler(function(){
+		<%-- 全部削除 (ダミ行は削除しない)--%>
+		var $ul = $("#" + es("<%=StringUtil.escapeJavaScript(ulId)%>"));
+		$ul.children("li:not(:hidden)").each(function(){
+			$(this).remove();
+		});
+
+		var propName = "<%=StringUtil.escapeJavaScript(propName) %>";
+		var _propName = propName.replace(/\[/g, "\\[").replace(/\]/g, "\\]").replace(/\./g, "\\.");
+		var multiplicity = -1;
+<%
+		//デフォルトで設定されているものを追加
+		String[] defaultValue = (String[]) request.getAttribute(Constants.EDITOR_DEFAULT_VALUE);
+		if (defaultValue != null && defaultValue.length > 0) {
+
+			for (int i = 0; i < defaultValue.length; i++) {
+				String oid = defaultValue[i];
+				Entity entity = em.load(oid, _defName);
+				if (entity == null || getDisplayPropLabel(editor, entity) == null) continue;
+				String displayPropLabel = getDisplayPropLabel(editor, entity);
+				String uniquePropValue = getUniquePropValue(editor, entity);
+
+				String viewAction = StringUtil.escapeJavaScript(view);
+				String label = StringUtil.escapeJavaScript(displayPropLabel);
+				String key = StringUtil.escapeJavaScript(entity.getOid() + "_" + entity.getVersion());
+				String unique = StringUtil.escapeJavaScript(uniquePropValue);
+%>
+		<%-- common.js --%>
+		addUniqueReference("<%=viewAction%>", "<%=key%>", "<%=label%>", "<%=unique%>", "<%=_defName%>", propName, multiplicity, "ul_" + _propName, "<%=dummyRowId%>", false, "id_count_" + _propName);
+<%
+			}
+		} else {
+
+			String viewAction = StringUtil.escapeJavaScript(view);
+			String label = "";
+			String key = "";
+			String unique = "";
+%>
+		<%-- common.js --%>
+		<%-- リセットした後に、最低でも1行を表示します。 --%>
+		addUniqueReference("<%=viewAction%>", "<%=key%>", "<%=label%>", "<%=unique%>", "<%=_defName%>", propName, multiplicity, "ul_" + _propName, "<%=dummyRowId%>", false, "id_count_" + _propName);
+<%
+		}
+%>
+	});
+
+<%
+		if (required) {
+%>
+	<%-- common.js --%>
+	addNormalValidator(function() {
+		var $ul = $("#" + es("<%=StringUtil.escapeJavaScript(ulId)%>"));
+		if ($ul.children().length == 0) {
+			alert(scriptContext.gem.locale.common.requiredMsg.replace("{0}", "<%=StringUtil.escapeJavaScript(displayLabel)%>"));
 			return false;
 		}
 		return true;

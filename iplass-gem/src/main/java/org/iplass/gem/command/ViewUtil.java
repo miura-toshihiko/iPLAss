@@ -44,8 +44,10 @@ import org.iplass.mtp.view.generic.FormView;
 import org.iplass.mtp.view.generic.common.WebApiAutocompletionSetting;
 import org.iplass.mtp.view.generic.element.Element;
 import org.iplass.mtp.view.generic.element.Element.EditDisplayType;
+import org.iplass.mtp.view.generic.element.property.PropertyColumn;
 import org.iplass.mtp.view.generic.element.property.PropertyItem;
 import org.iplass.mtp.view.generic.element.section.SearchConditionSection.CsvDownloadSpecifyCharacterCode;
+import org.iplass.mtp.view.generic.element.section.SearchResultSection;
 import org.iplass.mtp.view.top.TopViewDefinition;
 import org.iplass.mtp.view.top.TopViewDefinitionManager;
 import org.iplass.mtp.view.top.parts.CsvDownloadSettingsParts;
@@ -177,25 +179,42 @@ public class ViewUtil {
 	 * @return
 	 */
 	public static FormView getFormView(String defName, String viewName, boolean isSearchForm) {
+		FormView view = null;
+		if (isSearchForm) {
+			view = getFormView(defName, viewName, Constants.VIEW_TYPE_SEARCH);
+		} else {
+			view = getFormView(defName, viewName, Constants.VIEW_TYPE_DETAIL);
+		}
+		return view;
+	}
+
+	public static FormView getFormView(String defName, String viewName, String viewType) {
+		if (defName == null || defName.isEmpty()) return null;
 		EntityViewManager evm = ManagerLocator.getInstance().getManager(EntityViewManager.class);
 		EntityView ev = evm.get(defName);
 		if (ev == null) return null;
 
-		FormView view = null;
-		if (isSearchForm) {
+		FormView form = null;
+		if (Constants.VIEW_TYPE_DETAIL.equals(viewType)) {
 			if (viewName == null || viewName.isEmpty()) {
-				view = ev.getDefaultSearchFormView();
+				form = ev.getDefaultDetailFormView();
 			} else {
-				view = ev.getSearchFormView(viewName);
+				form = ev.getDetailFormView(viewName);
 			}
-		} else {
+		} else if (Constants.VIEW_TYPE_SEARCH.equals(viewType) || Constants.VIEW_TYPE_SEARCH_RESULT.equals(viewType) || Constants.VIEW_TYPE_BULK.equals(viewType)) {
 			if (viewName == null || viewName.isEmpty()) {
-				view = ev.getDefaultDetailFormView();
+				form = ev.getDefaultSearchFormView();
 			} else {
-				view = ev.getDetailFormView(viewName);
+				form = ev.getSearchFormView(viewName);
+			}
+		} else if (Constants.VIEW_TYPE_MULTI_BULK.equals(viewType)) {
+			if (viewName == null || viewName.isEmpty()) {
+				form = ev.getDefaultBulkFormView();
+			} else {
+				form = ev.getBulkFormView(viewName);
 			}
 		}
-		return view;
+		return form;
 	}
 
 	public static String getEntityImageColor(String defName, String viewName, boolean isSearchForm) {
@@ -226,6 +245,10 @@ public class ViewUtil {
 		return null;
 	}
 
+	public static List<PropertyColumn> filterPropertyColumn(List<Element> elements) {
+		return elements.stream().filter(e -> e instanceof PropertyColumn).map(e -> (PropertyColumn) e).collect(Collectors.toList());
+	}
+
 	/**
 	 * 編集画面でのキャンセル時に確認のメッセージを表示するか
 	 * @return
@@ -252,6 +275,21 @@ public class ViewUtil {
 	public static int getSearchInterval() {
 		GemConfigService gemConfigService = ServiceRegistry.getRegistry().getService(GemConfigService.class);
 		return gemConfigService.getSearchInterval();
+	}
+
+	/**
+	 * 検索結果のLimit件数を返します。
+	 *
+	 * @param resultSection SearchResultSection
+	 * @return 検索結果のLimit件数
+	 */
+	public static int getSearchLimit(SearchResultSection resultSection) {
+		Integer limit = resultSection.getDispRowCount();
+		if (limit != null && limit > 0) {
+			return limit;
+		}
+		GemConfigService gemConfigService = ServiceRegistry.getRegistry().getService(GemConfigService.class);
+		return gemConfigService.getSearchResultDispRowCount();
 	}
 
 	public static int getCsvDownloadInterval() {

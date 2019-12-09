@@ -43,6 +43,14 @@
 		if (property.getEditor() == null) return false;
 		return true;
 	}
+
+	String getDisplayPropLabel(ReferencePropertyEditor editor, Entity refEntity) {
+		String displayPropName = editor.getDisplayLabelItem();
+		if (displayPropName == null) {
+			displayPropName = Entity.NAME;
+		}
+		return refEntity.getValue(displayPropName);
+	}
 %>
 <%
 	ReferencePropertyEditor editor = (ReferencePropertyEditor) request.getAttribute(Constants.EDITOR_EDITOR);
@@ -73,8 +81,8 @@
 	String propName = editor.getPropertyName();
 
 	//タイプ毎に表示内容かえる
-	if (OutputType.EDIT == type) {
-		//詳細編集
+	if (OutputType.EDIT == type || OutputType.BULK == type) {
+		//詳細編集 or 一括更新編集
 %>
 <jsp:include page="./reference/ReferencePropertyEditor_Edit.jsp" />
 <jsp:include page="ErrorMessage.jsp">
@@ -96,18 +104,27 @@
 // 		if (pd.getMultiplicity() != 1) {
 //			複数表示不可→検索が出来ない
 // 		} else {
+			String rootDefName = (String) request.getAttribute(Constants.ROOT_DEF_NAME);
+			String viewName = (String) request.getAttribute(Constants.VIEW_NAME);
+			viewName = StringUtil.escapeHtml(viewName, true);
+			// 検索結果である場合は viewType = SearchResult,
+			// 大規模参照プロパティ検索である場合は viewType = Detail
+			String viewType = (String) request.getAttribute(Constants.VIEW_TYPE);
+			viewType = StringUtil.escapeHtml(viewType, true);
+
 			Entity entity = value instanceof Entity ? (Entity) value : null;
 			if (editor.getNestProperties().size() == 0) {
-				if (entity != null && entity.getName() != null) {
+				if (entity != null && getDisplayPropLabel(editor, entity) != null) {
 					String linkId = propName + "_" + entity.getOid();
+					String displayPropLabel = getDisplayPropLabel(editor, entity);
 					if (editor.getDisplayType() == ReferenceDisplayType.LABEL) {
 						//ラベルの場合はリンクにしない
 %>
-<c:out value="<%=entity.getName() %>" />
+<c:out value="<%=displayPropLabel %>" />
 <%
 					} else {
 %>
-<a href="javascript:void(0)" class="modal-lnk" id="<c:out value="<%=linkId %>" />" onclick="showReference('<%=StringUtil.escapeJavaScript(view)%>', '<%=StringUtil.escapeJavaScript(editor.getObjectName())%>', '<%=StringUtil.escapeJavaScript(entity.getOid())%>', '<%=entity.getVersion() %>', '<%=StringUtil.escapeJavaScript(linkId)%>', <%=refEdit %>)"><c:out value="<%=entity.getName() %>" /></a>
+<a href="javascript:void(0)" class="modal-lnk" id="<c:out value="<%=linkId %>" />" data-linkId="<c:out value="<%=linkId %>" />" onclick="showReference('<%=StringUtil.escapeJavaScript(view)%>', '<%=StringUtil.escapeJavaScript(editor.getObjectName())%>', '<%=StringUtil.escapeJavaScript(entity.getOid())%>', '<%=entity.getVersion() %>', '<%=StringUtil.escapeJavaScript(linkId)%>', <%=refEdit %>, null, '<%=rootDefName%>', '<%=viewName%>', '<%=propName%>', '<%=viewType%>')"><c:out value="<%=displayPropLabel %>" /></a>
 <%
 					}
 				}
@@ -133,7 +150,7 @@
 <%
 								} else {
 %>
-<a href="javascript:void(0)" class="modal-lnk" id="<c:out value="<%=linkId %>" />" onclick="showReference('<%=StringUtil.escapeJavaScript(view)%>', '<%=StringUtil.escapeJavaScript(editor.getObjectName())%>', '<%=StringUtil.escapeJavaScript(entity.getOid())%>', '<%=entity.getVersion() %>', '<%=StringUtil.escapeJavaScript(linkId)%>', <%=refEdit %>)"><c:out value="<%=entity.getName() %>" /></a>
+<a href="javascript:void(0)" class="modal-lnk" id="<c:out value="<%=linkId %>" />" data-linkId="<c:out value="<%=linkId %>" />" onclick="showReference('<%=StringUtil.escapeJavaScript(view)%>', '<%=StringUtil.escapeJavaScript(editor.getObjectName())%>', '<%=StringUtil.escapeJavaScript(entity.getOid())%>', '<%=entity.getVersion() %>', '<%=StringUtil.escapeJavaScript(linkId)%>', <%=refEdit %>, null, '<%=rootDefName%>', '<%=viewName%>', '<%=propName%>', '<%=viewType%>')"><c:out value="<%=entity.getName() %>" /></a>
 <%
 								}
 							}
@@ -144,6 +161,8 @@
 							request.setAttribute(Constants.EDITOR_EDITOR, npEditor);
 							request.setAttribute(Constants.EDITOR_PROP_VALUE, rValue);
 							request.setAttribute(Constants.EDITOR_PROPERTY_DEFINITION, _pd);
+							request.setAttribute(Constants.EDITOR_REF_NEST, true);//2重ネスト防止用フラグ
+							request.setAttribute(Constants.EDITOR_REF_NEST_VALUE, entity);//JoinProperty用
 							String path =  EntityViewUtil.getJspPath(npEditor, ViewConst.DESIGN_TYPE_GEM);
 							if (path != null) {
 								//プロパティ単位でhtmlを保持する仕組みの為、ネストの項目がうまく表示されない
@@ -161,6 +180,8 @@
 								}
 
 							}
+							request.removeAttribute(Constants.EDITOR_REF_NEST);
+							request.removeAttribute(Constants.EDITOR_REF_NEST_VALUE);
 						}
 					}
 				}

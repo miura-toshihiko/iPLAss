@@ -1,19 +1,19 @@
 /*
  * Copyright (C) 2015 INFORMATION SERVICES INTERNATIONAL - DENTSU, LTD. All Rights Reserved.
- * 
+ *
  * Unless you have purchased a commercial license,
  * the following license terms apply:
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
  * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
@@ -28,6 +28,7 @@ import org.iplass.adminconsole.view.annotation.generic.FieldReferenceType;
 
 /**
  * メタデータのフィールド情報
+ *
  * @author lis3wg
  */
 public class FieldInfo implements Serializable {
@@ -45,6 +46,9 @@ public class FieldInfo implements Serializable {
 
 	/** 入力タイプ */
 	private InputType inputType;
+
+	/** 表示順 */
+	private int displayOrder;
 
 	/** 必須入力か */
 	private boolean required;
@@ -82,16 +86,33 @@ public class FieldInfo implements Serializable {
 	/** フィールドの説明のキー */
 	private String descriptionKey;
 
+	/** 多言語プロパティ名 */
+	private String multiLangFieldName;
+
 	/**
-	 * 多言語設定を利用するか
+	 * inputTypeがPropertyの場合、サブダイアログで選択するプロパティ設定でのEntity名として利用するか
+	 * サブダイアログでのPropertyはこのEntityが対象になる
 	 */
-	private boolean useMultiLang;
+	private boolean childEntityName;
 
-	/** inputTypeがPropertyの場合、そのプロパティの型を別の入力項目のProperty選択に利用するか */
-	private boolean useReferenceType;
+	/**
+	 * inputTypeがPropertyの場合、このプロパティの選択肢を取得するためのEntity定義名
+	 * Entityが固定されている場合に設定
+	 */
+	private String fixedEntityName;
 
-	/** inputTypeがPropertyの場合、このプロパティの選択肢を取得するためのEntity定義名 */
-	private String entityDefinitionName;
+	/**
+	 * inputTypeがPropertyの場合、childEntityNameで指定されたEntity名を無視してルートのEntity名を利用するか
+	 * 指定された場合のみ、PropertyはルートのEntityが対象になる
+	 */
+	private boolean useRootEntityName;
+
+	/**
+	 * inputTypeがPropertyの場合、対象のEntity名を表すプロパティ名
+	 * 指定されたPropertyのProperty定義から対象のEntityを決定する。
+	 * 同じClass内で参照する場合に指定
+	 */
+	private String soruceEntityNameField;
 
 	/** 非推奨または未使用の項目か */
 	private boolean deprecated;
@@ -99,6 +120,8 @@ public class FieldInfo implements Serializable {
 	/** EntityViewのプロパティとして参照するタイプ */
 	private FieldReferenceType[] entityViewReferenceType;
 
+	/** 起動トリガーのタイプを上書きする参照タイプ */
+	private FieldReferenceType overrideTriggerType;
 
 	/**
 	 * コンストラクタ
@@ -108,6 +131,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * フィールド名を取得します。
+	 *
 	 * @return フィールド名
 	 */
 	public String getName() {
@@ -116,6 +140,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * フィールド名を設定します。
+	 *
 	 * @param name フィールド名
 	 */
 	public void setName(String name) {
@@ -124,6 +149,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * 表示名を取得します。
+	 *
 	 * @return 表示名
 	 */
 	public String getDisplayName() {
@@ -132,6 +158,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * 表示名を設定します。
+	 *
 	 * @param displayName 表示名
 	 */
 	public void setDisplayName(String displayName) {
@@ -140,6 +167,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * 表示名のキーを取得します。
+	 *
 	 * @return 表示名のキー
 	 */
 	public String getDisplayNameKey() {
@@ -148,6 +176,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * 表示名のキーを設定します。
+	 *
 	 * @param displayNameKey 表示名のキー
 	 */
 	public void setDisplayNameKey(String displayNameKey) {
@@ -156,6 +185,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * 入力タイプを取得します。
+	 *
 	 * @return 入力タイプ
 	 */
 	public InputType getInputType() {
@@ -164,6 +194,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * 入力タイプを設定します。
+	 *
 	 * @param inputType 入力タイプ
 	 */
 	public void setInputType(InputType inputType) {
@@ -171,7 +202,26 @@ public class FieldInfo implements Serializable {
 	}
 
 	/**
+	 * 表示順を取得します。
+	 *
+	 * @return 表示順
+	 */
+	public int getDisplayOrder() {
+		return displayOrder;
+	}
+
+	/**
+	 * 表示順を設定します。
+	 *
+	 * @param displayOrder 表示順
+	 */
+	public void setDisplayOrder(int displayOrder) {
+		this.displayOrder = displayOrder;
+	}
+
+	/**
 	 * 必須入力かを取得します。
+	 *
 	 * @return 必須入力か
 	 */
 	public boolean isRequired() {
@@ -180,6 +230,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * 必須入力かを設定します。
+	 *
 	 * @param required 必須入力か
 	 */
 	public void setRequired(boolean required) {
@@ -188,6 +239,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * 範囲チェックを行うかを取得します。
+	 *
 	 * @return 範囲チェックを行うか
 	 */
 	public boolean isRangeCheck() {
@@ -196,6 +248,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * 範囲チェックを行うかを設定します。
+	 *
 	 * @param rangeCheck 範囲チェックを行うか
 	 */
 	public void setRangeCheck(boolean rangeCheck) {
@@ -204,6 +257,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * 最大範囲を取得します。
+	 *
 	 * @return 最大範囲
 	 */
 	public int getMaxRange() {
@@ -212,6 +266,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * 最大範囲を設定します。
+	 *
 	 * @param maxRange 最大範囲
 	 */
 	public void setMaxRange(int maxRange) {
@@ -220,6 +275,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * 最小範囲を取得します。
+	 *
 	 * @return 最小範囲
 	 */
 	public int getMinRange() {
@@ -228,6 +284,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * 最小範囲を設定します。
+	 *
 	 * @param minRange 最小範囲
 	 */
 	public void setMinRange(int minRange) {
@@ -236,6 +293,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * 多重度を取得します。
+	 *
 	 * @return 多重度
 	 */
 	public boolean isMultiple() {
@@ -244,6 +302,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * 多重度を設定します。
+	 *
 	 * @param multiple 多重度
 	 */
 	public void setMultiple(boolean multiple) {
@@ -252,6 +311,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * 参照型クラスを取得します。
+	 *
 	 * @return 参照型クラス
 	 */
 	public String getReferenceClassName() {
@@ -260,6 +320,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * 参照型クラスを設定します。
+	 *
 	 * @param referenceClassName 参照型クラス
 	 */
 	public void setReferenceClassName(String referenceClassName) {
@@ -268,6 +329,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * 参照型クラス(固定)を取得します。
+	 *
 	 * @return 参照型クラス(固定)
 	 */
 	public Name[] getFixedReferenceClass() {
@@ -276,6 +338,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * 参照型クラス(固定)を設定します。
+	 *
 	 * @param referenceClassName 参照型クラス(固定)
 	 */
 	public void setFixedReferenceClass(Name[] fixedReferenceClass) {
@@ -284,22 +347,25 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * Enum値のクラス名を取得します。
+	 *
 	 * @return Enum値のクラス名
 	 */
 	public String getEnumClassName() {
-	    return enumClassName;
+		return enumClassName;
 	}
 
 	/**
 	 * Enum値のクラス名を設定します。
+	 *
 	 * @param enumClassName Enum値のクラス名
 	 */
 	public void setEnumClassName(String enumClassName) {
-	    this.enumClassName = enumClassName;
+		this.enumClassName = enumClassName;
 	}
 
 	/**
 	 * Enum値の配列を取得します。
+	 *
 	 * @return Enum値の配列
 	 */
 	public Serializable[] getEnumValues() {
@@ -308,6 +374,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * Enum値の配列を設定します。
+	 *
 	 * @param enumValues Enum値の配列
 	 */
 	public void setEnumValues(Serializable[] enumValues) {
@@ -316,6 +383,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * スクリプトのモードを取得します。
+	 *
 	 * @return スクリプトのモード
 	 */
 	public String getMode() {
@@ -324,6 +392,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * スクリプトのモードを設定します。
+	 *
 	 * @param mode スクリプトのモード
 	 */
 	public void setMode(String mode) {
@@ -332,6 +401,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * フィールドの説明を取得します。
+	 *
 	 * @return フィールドの説明
 	 */
 	public String getDescription() {
@@ -340,6 +410,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * フィールドの説明を設定します。
+	 *
 	 * @param description フィールドの説明
 	 */
 	public void setDescription(String description) {
@@ -348,6 +419,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * フィールドの説明のキーを取得します。
+	 *
 	 * @return フィールドの説明のキー
 	 */
 	public String getDescriptionKey() {
@@ -356,6 +428,7 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * フィールドの説明のキーを設定します。
+	 *
 	 * @param descriptionKey フィールドの説明のキー
 	 */
 	public void setDescriptionKey(String descriptionKey) {
@@ -363,68 +436,100 @@ public class FieldInfo implements Serializable {
 	}
 
 	/**
-	 * 多言語設定を利用するかを取得します。
-	 * @return 多言語設定を利用するか
+	 * 多言語プロパティ名を取得します。
+	 *
+	 * @return 多言語プロパティ名
 	 */
-	public boolean isUseMultiLang() {
-		return useMultiLang;
+	public String getMultiLangFieldName() {
+		return multiLangFieldName;
 	}
 
 	/**
-	 * 多言語設定を利用するかを設定します。
-	 * @param useMultiLang 多言語設定を利用するか
+	 * 多言語プロパティ名を設定します。
+	 *
+	 * @param multiLangFieldName 多言語プロパティ名
 	 */
-	public void setUseMultiLang(boolean useMultiLang) {
-		this.useMultiLang = useMultiLang;
+	public void setMultiLangFieldName(String multiLangFieldName) {
+		this.multiLangFieldName = multiLangFieldName;
 	}
 
 	/**
-	 * @return useReferenceType
+	 * @return childEntityName
 	 */
-	public boolean isUseReferenceType() {
-		return useReferenceType;
+	public boolean isChildEntityName() {
+		return childEntityName;
 	}
 
 	/**
-	 * @param useReferenceType セットする useReferenceType
+	 * @param childEntityName セットする childEntityName
 	 */
-	public void setUseReferenceType(boolean useReferenceType) {
-		this.useReferenceType = useReferenceType;
+	public void setChildEntityName(boolean childEntityName) {
+		this.childEntityName = childEntityName;
 	}
 
 	/**
-	 * @return entityDefinitionName
+	 * @return fixedEntityName
 	 */
-	public String getEntityDefinitionName() {
-		return entityDefinitionName;
+	public String getFixedEntityName() {
+		return fixedEntityName;
 	}
 
 	/**
-	 * @param entityDefinitionName セットする entityDefinitionName
+	 * @param fixedEntityName セットする fixedEntityName
 	 */
-	public void setEntityDefinitionName(String entityDefinitionName) {
-		this.entityDefinitionName = entityDefinitionName;
+	public void setFixedEntityName(String fixedEntityName) {
+		this.fixedEntityName = fixedEntityName;
+	}
+
+	/**
+	 * @return soruceEntityNameField
+	 */
+	public String getSourceEntityNameField() {
+		return soruceEntityNameField;
+	}
+
+	/**
+	 * @param soruceEntityNameField セットする soruceEntityNameField
+	 */
+	public void setSourceEntityNameField(String soruceEntityNameField) {
+		this.soruceEntityNameField = soruceEntityNameField;
+	}
+
+	/**
+	 * @return useRootEntityName
+	 */
+	public boolean isUseRootEntityName() {
+		return useRootEntityName;
+	}
+
+	/**
+	 * @param useRootEntityName セットする useRootEntityName
+	 */
+	public void setUseRootEntityName(boolean useRootEntityName) {
+		this.useRootEntityName = useRootEntityName;
 	}
 
 	/**
 	 * 非推奨または未使用の項目かを取得します。
+	 *
 	 * @return 非推奨または未使用の項目か
 	 */
 	public boolean isDeprecated() {
-	    return deprecated;
+		return deprecated;
 	}
 
 	/**
 	 * 非推奨または未使用の項目かを設定します。
+	 *
 	 * @param deprecated 非推奨または未使用の項目か
 	 */
 	public void setDeprecated(boolean deprecated) {
-	    this.deprecated = deprecated;
+		this.deprecated = deprecated;
 	}
-
 
 	/**
 	 * EntityViewのプロパティとして参照するタイプを取得します。
+	 *
 	 * @return EntityViewのプロパティとして参照するタイプ
 	 */
 	public FieldReferenceType[] getEntityViewReferenceType() {
@@ -433,10 +538,29 @@ public class FieldInfo implements Serializable {
 
 	/**
 	 * EntityViewのプロパティとして参照するタイプを設定します。
+	 *
 	 * @param entityViewReferenceType EntityViewのプロパティとして参照するタイプ
 	 */
 	public void setEntityViewReferenceType(FieldReferenceType[] entityViewReferenceType) {
 		this.entityViewReferenceType = entityViewReferenceType;
+	}
+
+	/**
+	 * 起動トリガーのタイプを上書きする参照タイプ
+	 *
+	 * @return 起動トリガーのタイプを上書きする参照タイプ
+	 */
+	public FieldReferenceType getOverrideTriggerType() {
+		return overrideTriggerType;
+	}
+
+	/**
+	 * 起動トリガーのタイプを上書きする参照タイプ
+	 *
+	 * @param overrideTriggerType 起動トリガーのタイプを上書きする参照タイプ
+	 */
+	public void setOverrideTriggerType(FieldReferenceType overrideTriggerType) {
+		this.overrideTriggerType = overrideTriggerType;
 	}
 
 }

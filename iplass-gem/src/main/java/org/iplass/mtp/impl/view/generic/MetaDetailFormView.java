@@ -125,11 +125,17 @@ public class MetaDetailFormView extends MetaFormView {
 	/** 削除ボタン非表示 */
 	private boolean hideDelete;
 
+	/** 物理削除するかどうか */
+	private boolean isPurge;
+
 	/** 親子関係の参照を物理削除するか */
 	private boolean purgeCompositionedEntity;
 
 	/** 定義されている参照プロパティのみを取得 */
 	private boolean loadDefinedReferenceProperty;
+
+	/** 更新時に強制的に更新処理を行う */
+	private boolean forceUpadte;
 
 	/** コピー対象 */
 	private CopyTarget copyTarget;
@@ -534,6 +540,22 @@ public class MetaDetailFormView extends MetaFormView {
 	}
 
 	/**
+	 * 物理削除するかどうかを取得します。
+	 * @return 物理削除するかどうか
+	 */
+	public boolean isPurge() {
+	    return isPurge;
+	}
+
+	/**
+	 * 物理削除するかどうかを設定します。
+	 * @param isPurge 物理削除するかどうか
+	 */
+	public void setPurge(boolean isPurge) {
+	    this.isPurge = isPurge;
+	}
+
+	/**
 	 * 親子関係の参照を物理削除するかを取得します。
 	 * @return 親子関係の参照を物理削除するか
 	 */
@@ -563,6 +585,22 @@ public class MetaDetailFormView extends MetaFormView {
 	 */
 	public void setLoadDefinedReferenceProperty(boolean loadDefinedReferenceProperty) {
 	    this.loadDefinedReferenceProperty = loadDefinedReferenceProperty;
+	}
+
+	/**
+	 * 更新時に強制的に更新処理を行うかを取得します。
+	 * @return forceUpdate 更新時に強制的に更新処理を行うか
+	 */
+	public boolean isForceUpadte() {
+		return forceUpadte;
+	}
+
+	/**
+	 * 更新時に強制的に更新処理を行うかを設定します。
+	 * @param forceUpadte 更新時に強制的に更新処理を行うか
+	 */
+	public void setForceUpadte(boolean forceUpadte) {
+		this.forceUpadte = forceUpadte;
 	}
 
 	/**
@@ -731,8 +769,10 @@ public class MetaDetailFormView extends MetaFormView {
 		hideDetail = dForm.isHideDetail();
 		isNoneDispCopyButton = dForm.isNoneDispCopyButton();
 		hideDelete = dForm.isHideDelete();
+		isPurge = dForm.isPurge();
 		purgeCompositionedEntity = dForm.isPurgeCompositionedEntity();
 		loadDefinedReferenceProperty = dForm.isLoadDefinedReferenceProperty();
+		forceUpadte = dForm.isForceUpadte();
 		javaScript = dForm.getJavaScript();
 		validJavascriptDetailPage = dForm.isValidJavascriptDetailPage();
 		validJavascriptViewPage = dForm.isValidJavascriptViewPage();
@@ -776,8 +816,10 @@ public class MetaDetailFormView extends MetaFormView {
 		form.setHideDetail(hideDetail);
 		form.setIsNoneDispCopyButton(isNoneDispCopyButton);
 		form.setHideDelete(hideDelete);
+		form.setPurge(isPurge);
 		form.setPurgeCompositionedEntity(purgeCompositionedEntity);
 		form.setLoadDefinedReferenceProperty(loadDefinedReferenceProperty);
+		form.setForceUpadte(forceUpadte);
 		form.setJavaScript(javaScript);
 		form.setInterrupterName(interrupterName);
 		form.setLoadEntityInterrupterName(loadEntityInterrupterName);

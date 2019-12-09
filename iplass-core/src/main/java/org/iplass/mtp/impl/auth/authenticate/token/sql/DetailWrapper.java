@@ -19,21 +19,25 @@
  */
 package org.iplass.mtp.impl.auth.authenticate.token.sql;
 
-public class DetailWrapper {
-	private Object details;
+import java.io.Serializable;
+
+public class DetailWrapper implements Serializable {
+	private static final long serialVersionUID = 2926799761837894728L;
+
+	private Serializable details;
 	
 	public DetailWrapper() {
 	}
 
-	public DetailWrapper(Object details) {
+	public DetailWrapper(Serializable details) {
 		this.details = details;
 	}
 
-	public Object getDetails() {
+	public Serializable getDetails() {
 		return details;
 	}
 
-	public void setDetails(Object details) {
+	public void setDetails(Serializable details) {
 		this.details = details;
 	}
 

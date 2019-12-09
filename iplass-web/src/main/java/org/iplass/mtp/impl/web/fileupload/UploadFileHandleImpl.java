@@ -20,6 +20,8 @@
 
 package org.iplass.mtp.impl.web.fileupload;
 
+import static org.iplass.mtp.impl.web.WebResourceBundleUtil.resourceString;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -41,7 +43,6 @@ import org.iplass.mtp.entity.EntityManager;
 import org.iplass.mtp.impl.util.UploadFileUtil;
 import org.iplass.mtp.impl.web.WebFrontendService;
 import org.iplass.mtp.impl.web.WebProcessRuntimeException;
-import org.iplass.mtp.impl.web.WebResourceBundleUtil;
 import org.iplass.mtp.spi.ServiceRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,7 +53,7 @@ public class UploadFileHandleImpl implements UploadFileHandle {
 	private static final Logger logger = LoggerFactory.getLogger(UploadFileHandleImpl.class);
 	private static WebFrontendService webFront = ServiceRegistry.getRegistry().getService(WebFrontendService.class);
 
-	public static UploadFileHandleImpl toUploadFileHandle(InputStream is, String fileName, String type, ServletContext servletContext) throws IOException {
+	public static UploadFileHandleImpl toUploadFileHandle(InputStream is, String fileName, String type, ServletContext servletContext, long maxSize) throws IOException {
 		try {
 			UploadFileHandleImpl value = null;
 			
@@ -62,7 +63,6 @@ public class UploadFileHandleImpl implements UploadFileHandle {
 			} else {
 				tempDir = new File(webFront.getTempFileDir());
 			}
-			long maxSize = webFront.getMaxUploadFileSize();
 			
 	    	fileName = delPath(fileName);
 			if (fileName != null && fileName.length() != 0) {
@@ -72,26 +72,32 @@ public class UploadFileHandleImpl implements UploadFileHandle {
 				try {
 					tempFile = File.createTempFile("tmp", ext, tempDir);
 					try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+						//TODO ここでサイズオーバーの場合ぶった切るか？後続のウイルスチェックするため、一旦全部読み込みか？
+						//後者の実装としとく。
 						size = Streams.copy(is, fos, true);
+					}
+					
+					// tempFileのウィルスチェック
+					FileScanner scanHandle = webFront.getUploadFileScanner();
+					if (scanHandle != null) {
+						scanHandle.scan(tempFile.getAbsolutePath());
+						
+						// ウィルスに感染していた場合はファイルを削除する設定になっている事が前提
+						if (!tempFile.exists()) {
+							throw new WebProcessRuntimeException(fileName + " is a file infected with the virus.");
+						}
 					}
 				} catch (RuntimeException | IOException e) {
 					if (tempFile != null) {
-						tempFile.delete();
+						try {
+							Files.delete(tempFile.toPath());
+						} catch (IOException ee) {
+							logger.warn("can not delete temp file:" + fileName + ", cause:" + ee, ee);
+						}
 					}
 					throw e;
 				}
-				
-				// tempFileのウィルスチェック
-				FileScanner scanHandle = webFront.getUploadFileScanner();
-				
-				if (scanHandle != null) {
-					scanHandle.scan(tempFile.getAbsolutePath());
-					// ウィルスに感染していた場合はファイルを削除する設定になっている事が前提
-					if (!tempFile.exists()) {
-						throw new WebProcessRuntimeException(fileName + " is a file infected with the virus.");
-					}
-				}
-		
+
 				if (maxSize != -1 && size > maxSize) {
 					value = new UploadFileHandleImpl(tempFile, fileName, type, size, true);
 				} else {
@@ -104,7 +110,9 @@ public class UploadFileHandleImpl implements UploadFileHandle {
 				try {
 					is.close();
 				} catch (IOException e) {
-					logger.warn("can not close resource:" + fileName + ", mybe leak...", e);
+					if (logger.isDebugEnabled()) {
+						logger.debug("can not close request's multipart inputstream:" + fileName + ", " + e, e);
+					}
 				}
 			}
 		}
@@ -160,23 +168,13 @@ public class UploadFileHandleImpl implements UploadFileHandle {
 			UploadFileUtil.checkMagicByte(tempFile, type, fileName);
 		}
 
-		FileInputStream is = null;
-		try {
-			is = new FileInputStream(tempFile);
-			EntityManager em = ManagerLocator.getInstance().getManager(EntityManager.class);
-			return em.createBinaryReference(fileName, type, is);
-		} catch (FileNotFoundException e) {
-			logger.warn("upload file is externally deleted. maybe contains virus." , e);
+		if (!tempFile.exists()) {
+			logger.warn("upload file is externally deleted. maybe contains virus. fileName:" + fileName);
 			return null;
-		} finally {
-			if (is != null) {
-				try {
-					is.close();
-				} catch (IOException e) {
-					logger.warn("can not close resource:" + tempFile.getName(), e);
-				}
-			}
 		}
+		
+		EntityManager em = ManagerLocator.getInstance().getManager(EntityManager.class);
+		return em.createBinaryReference(tempFile, fileName, type);
 	}
 
 	@Override
@@ -184,7 +182,6 @@ public class UploadFileHandleImpl implements UploadFileHandle {
 		return size;
 	}
 
-	//TODO バイナリストリームはパブリッククラウドの場合は、使わせないほうがよいか？
 	@Override
 	public InputStream getInputStream() {
 		if (isSizeOver) {
@@ -247,8 +244,10 @@ public class UploadFileHandleImpl implements UploadFileHandle {
 	
 	public void deleteTempFile() {
 		if (tempFile != null) {
-			if (!tempFile.delete()) {
-				logger.warn("maybe not delete file:" + tempFile.getName());
+			try {
+				Files.delete(tempFile.toPath());
+			} catch (Exception e) {
+				logger.warn("can not delete temp file:" + fileName + ", cause:" + e, e);
 			}
 		}
 	}
@@ -258,7 +257,4 @@ public class UploadFileHandleImpl implements UploadFileHandle {
 		return fileName;
 	}
 
-	private static String resourceString(String key, Object... arguments) {
-		return WebResourceBundleUtil.resourceString(key, arguments);
-	}
 }

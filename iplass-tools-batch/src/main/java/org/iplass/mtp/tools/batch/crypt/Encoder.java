@@ -14,20 +14,21 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Properties;
 
+import org.iplass.mtp.impl.core.config.BootstrapProps;
 import org.iplass.mtp.impl.core.config.PropertyValueCoder;
-import org.iplass.mtp.impl.core.config.ServiceRegistryInitializer;
 
 public class Encoder {
 	
 	
 	private static Properties getProperties() throws IOException {
-		String fileName = ServiceRegistryInitializer.getCryptoConfigFileName();
+		String fileName = BootstrapProps.getInstance().getProperty(BootstrapProps.CRYPT_CONFIG_FILE_NAME);
 		if (fileName != null) {
 			Properties prop = new Properties();
 			Path path = Paths.get(fileName);
 			if (Files.exists(path)) {
 				System.out.println("load CryptConfigFile from file path:" + fileName);
-				try (InputStreamReader is = new InputStreamReader(new FileInputStream(path.toFile()), "utf-8")) {
+				try (FileInputStream fis = new FileInputStream(path.toFile());
+						InputStreamReader is = new InputStreamReader(fis, "utf-8")) {
 					prop.load(is);
 				}
 			} else {
@@ -129,6 +130,11 @@ public class Encoder {
 			System.out.println("encrypted text:");
 			System.out.println(coder.encode(plain));
 			System.out.println();
+			
+			// 引数指定で起動する場合、バッチ処理を終了する。
+			if (args.length > 1 && args[0].equals("-file")) {
+				return;
+			}
 		}
 
 	}

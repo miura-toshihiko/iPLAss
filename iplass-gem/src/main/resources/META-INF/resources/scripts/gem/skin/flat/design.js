@@ -64,7 +64,9 @@ $(function() {
 
 	//cookieから展開状態復元
 	if (getCookie("currentMenuId")) {
-		$("#" + es(getCookie("currentMenuId"))).parents(".menu-node:has(.nav-detail)").addClass("sub-open").children("ul").show();
+		//起動時は選択Rootメニュー配下を全て展開して表示
+		var currentRootMenuNode = $("#" + es(getCookie("currentMenuId"))).parents(".menu-node.root-menu-node").addClass("sub-open").children("ul").show();
+		currentRootMenuNode.find(".menu-node").addClass("sub-open");
 
 		$("#" + es(getCookie("currentMenuId"))).addClass("selected");
 		$("#" + es(getCookie("currentMenuId"))).parents(".root-menu-node").addClass("selected");
@@ -126,6 +128,7 @@ $(function() {
 	$(".recursiveTreeTrigger").refRecursiveTree();
 	$(".refLinkSelect").refLinkSelect();
 	$(".refLinkRadio").refLinkRadio();
+	$(".refUnique").refUnique();
 
 	if (typeof CKEDITOR !== "undefined") {
 		CKEDITOR.on("instanceReady", function(ev) {
@@ -239,19 +242,32 @@ $(function() {
 				setCookie("nav-closed", null, 0);
 			}
 		});
-		$("#nav").find(".menu-node").on("click", function() {
-			var $this = $(this),
-				speed = 300;
-			if (!$("html").is(".nav-closed")) {
-				if (!$this.is(".sub-open")) {
-					$this.addClass("sub-open").find(".nav-detail").stop().slideDown(speed);
-					$this.siblings().removeClass("sub-open").find(".nav-detail").stop().slideUp(speed);
-				} else {
-					$this.removeClass("sub-open").find(".nav-detail").stop().slideUp(speed);
+
+		//2階層目以降のnodeメニューアイテムにnav-sub-detailを設定
+		$("#nav ul.subMenuList").addClass("nav-sub-detail");
+		$("#nav ul.subMenuList .menu-node > ul").addClass("nav-sub-detail");
+
+		$("#nav").find(".menu-node").each(function() {
+			var $this = $(this);
+			$this.children("ul").attr("data-category", $(this).children("p").children("a").text());
+
+			$this.on("click", function(event) {
+				event.stopPropagation();
+				var $this = $(this), speed = 300;
+				if (!$("html").is(".nav-closed")) {
+					if (!$this.is(".sub-open")) {
+						$this.addClass("sub-open").find(".menu-node").addClass("sub-open");
+						$this.find(".nav-detail,.nav-sub-detail").stop().slideDown(speed);
+						if ($this.is(".root-menu-node")) {
+							//ルートの場合は他のメニューを全てClose
+							$this.siblings().removeClass("sub-open").find(".nav-detail,.nav-sub-detail").stop().slideUp(speed);
+						}
+					} else {
+						$this.removeClass("sub-open").find(".sub-open").removeClass("sub-open");
+						$this.find(".nav-detail,.nav-sub-detail").stop().slideUp(speed);
+					}
 				}
-			}
-		}).each(function() {
-			$(this).children("ul").attr("data-category", $(this).children("p").children("a").text());
+			});
 		});
 
 		// entityview
@@ -288,6 +304,18 @@ $(function() {
 		if ($("body.modal-body").length > 0 && $(".result-block + .btn").length > 0) {
 			$(".result-block form").after($(".result-block + .btn"));
 		}
+
+		//OAuth Application
+		var $authDetailForms = $(".detailForm", $(".auth-application")).each(function() {
+			var $authDetailForm = $(this);
+			$authDetailForm.find(".nav-section").after("<div class='formArchive'/>");
+			var $authFormArchive = $(".formArchive", $authDetailForm);
+			$authDetailForm.children("div:not(.lyt-edit-01,.lyt-edit-02,.operation-bar)").each(function() {
+				var $this = $(this);
+				$this.appendTo($authFormArchive);
+			});
+		});
+
 	} else {
 		//ログイン
 		$("#header-container").find("#header").prependTo("#main");
@@ -334,11 +362,11 @@ $(function() {
 		var $under = $("<div class='modal-inner sub-modal-inner' />").appendTo($dialog);
 		var $title = $("<h2 class='hgroup-01' />").appendTo($under);
 		$("<span />").attr({id: "modal-title-" + name}).appendTo($title);
-		$("<p class='modal-maximize sub-modal-maximize' />").attr("title", scriptContext.locale.maximizeLink).appendTo($under)
+		$("<p class='modal-maximize sub-modal-maximize' />").attr("title", scriptContext.gem.locale.modal.maximizeLink).appendTo($under)
 			.append("<i class='far fa-window-maximize fa-2x'></i>");
-		$("<p class='modal-restore sub-modal-restore' />").attr("title", scriptContext.locale.restoreLink).appendTo($under)
+		$("<p class='modal-restore sub-modal-restore' />").attr("title", scriptContext.gem.locale.modal.restoreLink).appendTo($under)
 			.append("<i class='far fa-window-restore fa-2x'></i>");
-		$("<p class='modal-close sub-modal-close' />").attr("title", scriptContext.locale.closeLink).appendTo($under)
+		$("<p class='modal-close sub-modal-close' />").attr("title", scriptContext.gem.locale.modal.closeLink).appendTo($under)
 			.append("<i class='far fa-window-close fa-2x'></i>");
 		var ifrm = "<iframe src=\"about:blank\" height=\"686\" width=\"100%\" frameborder=\"0\" name=\"" + name + "\"/>";
 		var $frame = $(ifrm).appendTo($under);
@@ -347,10 +375,7 @@ $(function() {
 	};
 
 	//Checkbox and Radio button
-	$("input[type=radio],input[type=checkbox]").each(createPseudoObject).on("click", function(e) {
-		e.stopPropagation();
-		$(this).prev().trigger("click");
-	});
+	$("input[type=radio],input[type=checkbox]").each(createPseudoObject);
 	$("input[type=radio],input[type=checkbox]").parent("label").on("click", function(e) {
 		var $pseudo = $(this).children(".pseudo-radio,.pseudo-checkbox");
 		if ($pseudo.is(":visible")) {
@@ -365,6 +390,31 @@ $(function() {
 
 	$("#content").show();
 	$(".fixHeight").fixHeight(); //高さ揃え実行
+
+	//ネストテーブルで行追加時にラジオのイベントが反映されないので行追加をオーバーライド
+	if (typeof addNestRow !== "undefined") {
+		var _addNestRow = addNestRow;
+
+		addNestRow = function(rowId, countId, multiplicy, insertTop, rootDefName, viewName, orgPropName, callback, delCallback) {
+			var $row = _addNestRow(rowId, countId, multiplicy, insertTop, rootDefName, viewName, orgPropName, callback, delCallback);
+
+			$("input[type=radio],input[type=checkbox]", $row).on("click", function(e) {
+				e.stopPropagation();
+				$(this).prev().trigger("click");
+			});
+			$("input[type=radio],input[type=checkbox]", $row).parent("label").on("click", function(e) {
+				var $pseudo = $(this).children(".pseudo-radio,.pseudo-checkbox");
+				if ($pseudo.is(":visible")) {
+					// ラベル部分クリックでイベントが2重発生しないよう抑制
+					$pseudo.trigger("click");
+					e.preventDefault();
+				}
+			});
+
+			$(".pseudo-radio", $row).on("click", onClickPseudoRadio);
+			$(".pseudo-checkbox", $row).on("click", onClickPseudoCheckbox);
+		}
+	}
 });
 
 /**
@@ -372,12 +422,30 @@ $(function() {
  * @returns
  */
 function createPseudoObject() {
-	var $this = $(this),
-		isChecked = "";
+	var $this = $(this), isChecked = "", valueTogglable = "";
+
+	//jqgridの選択用checkboxは除外
+	if ($this.hasClass("cbox")) {
+		return;
+	}
+	
+	//値の選択解除が可能か
+	if ($this.hasClass("radio-togglable")) {
+		valueTogglable = "radio-togglable";
+	}
+
 	if ($this.prop("checked")) {
 		isChecked = "checked";
 	}
-	var $pseudo = $("<span class='pseudo-" + $this.attr("type") + " " + isChecked + "'/>").insertBefore(this);
+	var $pseudo = $("<span class='pseudo-" + $this.attr("type") + " " + isChecked + " " + valueTogglable + "'/>").attr("tabIndex", "0").insertBefore(this);
+	$pseudo.on("keydown", function(e) {
+		//Spaceで選択
+		if(e.keyCode === 32) {
+			$(this).trigger("click");
+			// Spaceにより画面がスクロールしないよう抑制
+			e.preventDefault();
+		}
+	});
 	$pseudo.parent().addClass("pseudo-parent");
 	if ($this.prop("disabled")) {
 		$pseudo.parent().addClass("disabled");
@@ -391,8 +459,14 @@ function createPseudoObject() {
 			}
 		});
 	}
-}
 
+	//ダミーのイベントを発生させる
+	$this.on("click", function(e) {
+		e.stopPropagation();
+		$(this).prev().trigger("click");
+	});
+}
+ 
 /**
  * 偽チェックボックスクリックイベント
  * @returns
@@ -424,6 +498,11 @@ function onClickPseudoRadio() {
 	if (!$this.is(".checked")) {
 		$pseudoSiblings.removeClass("checked");
 		$this.addClass("checked").next("input").prop("checked", true).trigger("change");
+	} else {
+		//選択されている場合は、設定により解除
+		if ($this.hasClass("radio-togglable")) {
+			$this.removeClass("checked").next("input").prop("checked", false).trigger("change");
+		}
 	}
 	return false;
 }

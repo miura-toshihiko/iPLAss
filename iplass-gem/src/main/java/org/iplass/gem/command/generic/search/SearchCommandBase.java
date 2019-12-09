@@ -38,6 +38,7 @@ import org.iplass.mtp.entity.EntityManager;
 import org.iplass.mtp.entity.EntityRuntimeException;
 import org.iplass.mtp.entity.SearchResult;
 import org.iplass.mtp.entity.definition.EntityDefinitionManager;
+import org.iplass.mtp.entity.permission.EntityPermission;
 import org.iplass.mtp.entity.query.Query;
 import org.iplass.mtp.entity.query.condition.predicate.In;
 import org.iplass.mtp.view.generic.EntityViewManager;
@@ -81,7 +82,17 @@ public abstract class SearchCommandBase implements Command {
 		}
 
 		//Queryを生成して正しくEQLに変換できるかをチェック
-		Query query = toQuery(context);
+		Query query = null;
+		if (isSearchDelete(request)) {
+			// 全削除
+			query = toQueryForDelete(context);
+		} else if (isSearchBulk(request)) {
+			// 全一括更新
+			query = toQueryForBulkUpdate(context);
+		} else {
+			query = toQuery(context);
+		}
+
 		if (query == null) {
 			return Constants.CMD_EXEC_ERROR_SEARCH;
 		}
@@ -95,8 +106,16 @@ public abstract class SearchCommandBase implements Command {
 			count(context, query.copy());
 		}
 
-		if (context.isSearch()) {
+		if (isSearchDelete(request)) {
 			search(context, query.copy());
+		} else if (isSearchBulk(request)) {
+			search(context, query.copy());
+		} else if (context.isSearch()) {
+			Query q = query.copy();
+			// 検索時にEQLにOrderByとLimitを付けます。
+			setOrderBy(context, q);
+			setLimit(context, q);
+			search(context, q);
 		}
 
 		return Constants.CMD_EXEC_SUCCESS;
@@ -134,6 +153,69 @@ public abstract class SearchCommandBase implements Command {
 		return query;
 	}
 
+	protected Query toQueryForDelete(SearchContext context) {
+		Query query = new Query();
+		// 全削除する場合、抽出項目はSearchResultSectionの定義を見なくて良いです。
+		query.select(Entity.OID, Entity.VERSION);
+		query.from(context.getDefName());
+		query.setWhere(context.getWhere());
+		query.setVersiond(context.isVersioned());
+
+		return query;
+	}
+
+	protected Query toQueryForBulkUpdate(SearchContext context) {
+		Query query = new Query();
+		// 全一括更新する場合、抽出項目はSearchResultSectionの定義を見なくて良いです。
+		query.select(Entity.OID, Entity.VERSION, Entity.UPDATE_DATE);
+		query.from(context.getDefName());
+		query.setWhere(context.getWhere());
+		query.setVersiond(context.isVersioned());
+
+		return query;
+	}
+
+	protected void setLimit(SearchContext context, Query query) {
+		final SearchContextBase _context = (SearchContextBase) context;
+		if (!_context.getResultSection().isHidePaging()) {
+			query.setLimit(context.getLimit());
+		}
+	}
+
+	protected void setOrderBy(SearchContext context, Query query) {
+		query.setOrderBy(context.getOrderBy());
+	}
+
+	/**
+	 * 全削除するモードかを返す
+	 */
+	public boolean isSearchDelete(RequestContext request) {
+		return (request.getAttribute("isSearchDelete") != null
+				&& (Boolean) request.getAttribute("isSearchDelete"));
+	}
+
+	/**
+	 * 全削除するモードかを設定する
+	 */
+	public void setSearchDelete(RequestContext request, boolean isDelete) {
+		request.setAttribute("isSearchDelete", isDelete);
+	}
+
+	/**
+	 * 全一括更新するモードかを返す
+	 */
+	public boolean isSearchBulk(RequestContext request) {
+		return (request.getAttribute("isSearchBulk") != null
+				&& (Boolean) request.getAttribute("isSearchBulk"));
+	}
+
+	/**
+	 * 全一括更新するモードかを設定する
+	 */
+	public void setSearchBulk(RequestContext request, boolean isBulk) {
+		request.setAttribute("isSearchBulk", isBulk);
+	}
+
 	/**
 	 * 条件を検証するモードかを返す
 	 */
@@ -152,10 +234,6 @@ public abstract class SearchCommandBase implements Command {
 	final protected void search(SearchContext context, Query query) {
 		final SearchContextBase _context = (SearchContextBase) context;
 		final List<String> userOidList = new ArrayList<>();
-		query.setOrderBy(context.getOrderBy());
-		if (!_context.getResultSection().isHidePaging()) {
-			query.setLimit(context.getLimit());
-		}
 
 		//検索前処理
 		final SearchQueryContext sqContext = _context.beforeSearch(query, SearchQueryType.SEACH);
@@ -165,7 +243,11 @@ public abstract class SearchCommandBase implements Command {
 			//特権実行
 			result = AuthContext.doPrivileged(() -> searchEntity(_context, userOidList, sqContext.getQuery()));
 		} else {
-			result = searchEntity(_context, userOidList, sqContext.getQuery());
+			if (sqContext.getWithoutConditionReferenceName() != null) {
+				result = EntityPermission.doQueryAs(sqContext.getWithoutConditionReferenceName(), () -> searchEntity(_context, userOidList, sqContext.getQuery()));
+			} else {
+				result = searchEntity(_context, userOidList, sqContext.getQuery());
+			}
 		}
 		context.getRequest().setAttribute("result", result);
 
@@ -230,7 +312,11 @@ public abstract class SearchCommandBase implements Command {
 			//特権実行
 			count = AuthContext.doPrivileged(() -> em.count(sqContext.getQuery()));
 		} else {
-			count = em.count(sqContext.getQuery());
+			if (sqContext.getWithoutConditionReferenceName() != null) {
+				count = EntityPermission.doQueryAs(sqContext.getWithoutConditionReferenceName(), () -> em.count(sqContext.getQuery()));
+			} else {
+				count = em.count(sqContext.getQuery());
+			}
 		}
 
 		context.getRequest().setAttribute("count", count);

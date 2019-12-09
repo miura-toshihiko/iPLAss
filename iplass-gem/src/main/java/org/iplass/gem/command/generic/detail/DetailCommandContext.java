@@ -23,43 +23,31 @@ package org.iplass.gem.command.generic.detail;
 import java.lang.reflect.Array;
 import java.sql.Timestamp;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.iplass.gem.GemConfigService;
 import org.iplass.gem.command.CommandUtil;
 import org.iplass.gem.command.Constants;
-import org.iplass.gem.command.GemResourceBundleUtil;
 import org.iplass.gem.command.ViewUtil;
-import org.iplass.gem.command.generic.GenericCommandContext;
-import org.iplass.mtp.ApplicationException;
-import org.iplass.mtp.ManagerLocator;
 import org.iplass.mtp.command.RequestContext;
-import org.iplass.mtp.entity.BinaryReference;
 import org.iplass.mtp.entity.Entity;
 import org.iplass.mtp.entity.EntityManager;
-import org.iplass.mtp.entity.EntityRuntimeException;
-import org.iplass.mtp.entity.GenericEntity;
 import org.iplass.mtp.entity.LoadOption;
-import org.iplass.mtp.entity.SelectValue;
 import org.iplass.mtp.entity.ValidateError;
 import org.iplass.mtp.entity.definition.EntityDefinition;
 import org.iplass.mtp.entity.definition.EntityDefinitionManager;
 import org.iplass.mtp.entity.definition.PropertyDefinition;
-import org.iplass.mtp.entity.definition.PropertyDefinitionType;
-import org.iplass.mtp.entity.definition.properties.AutoNumberProperty;
-import org.iplass.mtp.entity.definition.properties.BinaryProperty;
 import org.iplass.mtp.entity.definition.properties.BooleanProperty;
 import org.iplass.mtp.entity.definition.properties.DateProperty;
 import org.iplass.mtp.entity.definition.properties.DateTimeProperty;
 import org.iplass.mtp.entity.definition.properties.DecimalProperty;
-import org.iplass.mtp.entity.definition.properties.ExpressionProperty;
 import org.iplass.mtp.entity.definition.properties.FloatProperty;
 import org.iplass.mtp.entity.definition.properties.IntegerProperty;
-import org.iplass.mtp.entity.definition.properties.LongTextProperty;
 import org.iplass.mtp.entity.definition.properties.ReferenceProperty;
 import org.iplass.mtp.entity.definition.properties.SelectProperty;
 import org.iplass.mtp.entity.definition.properties.StringProperty;
@@ -67,28 +55,17 @@ import org.iplass.mtp.entity.definition.properties.TimeProperty;
 import org.iplass.mtp.impl.util.ConvertUtil;
 import org.iplass.mtp.spi.ServiceRegistry;
 import org.iplass.mtp.util.StringUtil;
-import org.iplass.mtp.utilityclass.definition.UtilityClassDefinitionManager;
 import org.iplass.mtp.view.generic.DetailFormView;
 import org.iplass.mtp.view.generic.DetailFormView.CopyTarget;
 import org.iplass.mtp.view.generic.EntityViewUtil;
 import org.iplass.mtp.view.generic.FormViewUtil;
-import org.iplass.mtp.view.generic.LoadEntityContext;
-import org.iplass.mtp.view.generic.LoadEntityInterrupter;
-import org.iplass.mtp.view.generic.RegistrationInterrupter;
-import org.iplass.mtp.view.generic.editor.BooleanPropertyEditor;
-import org.iplass.mtp.view.generic.editor.DatePropertyEditor;
+import org.iplass.mtp.view.generic.OutputType;
 import org.iplass.mtp.view.generic.editor.DateRangePropertyEditor;
-import org.iplass.mtp.view.generic.editor.DecimalPropertyEditor;
-import org.iplass.mtp.view.generic.editor.FloatPropertyEditor;
-import org.iplass.mtp.view.generic.editor.IntegerPropertyEditor;
 import org.iplass.mtp.view.generic.editor.JoinPropertyEditor;
 import org.iplass.mtp.view.generic.editor.NestProperty;
+import org.iplass.mtp.view.generic.editor.PropertyEditor;
 import org.iplass.mtp.view.generic.editor.ReferencePropertyEditor;
 import org.iplass.mtp.view.generic.editor.ReferencePropertyEditor.ReferenceDisplayType;
-import org.iplass.mtp.view.generic.editor.SelectPropertyEditor;
-import org.iplass.mtp.view.generic.editor.StringPropertyEditor;
-import org.iplass.mtp.view.generic.editor.TimePropertyEditor;
-import org.iplass.mtp.view.generic.editor.TimestampPropertyEditor;
 import org.iplass.mtp.view.generic.editor.UserPropertyEditor;
 import org.iplass.mtp.view.generic.element.Element;
 import org.iplass.mtp.view.generic.element.VirtualPropertyItem;
@@ -104,9 +81,9 @@ import org.slf4j.LoggerFactory;
  * 詳細コマンド関連の情報を管理するクラス。
  * @author lis3wg
  */
-public class DetailCommandContext extends GenericCommandContext {
+public class DetailCommandContext extends RegistrationCommandContext {
 
-	private static Logger log = LoggerFactory.getLogger(DetailCommandContext.class);
+	private static Logger logger = LoggerFactory.getLogger(DetailCommandContext.class);
 
 	/** 編集画面用のFormレイアウト情報 */
 	private DetailFormView view;
@@ -115,18 +92,10 @@ public class DetailCommandContext extends GenericCommandContext {
 
 	private Set<String> useUserPropertyEditorPropertyNameList;
 
-	private EntityManager entityManager;
-	private EntityDefinitionManager definitionManager;
-	private UtilityClassDefinitionManager ucdm;
-
-	/** 変換時に発生したエラー情報 */
-	private List<ValidateError> errors;
-
-	private RegistrationInterrupterHandler interrupterHandler;
-
-	private LoadEntityInterrupterHandler loadEntityInterrupterHandler;
-
-	private List<ReferenceRegistHandler> referenceRegistHandlers = new ArrayList<>();
+	@Override
+	protected Logger getLogger() {
+		return logger;
+	}
 
 	/**
 	 * コンストラクタ
@@ -134,18 +103,28 @@ public class DetailCommandContext extends GenericCommandContext {
 	 */
 	public DetailCommandContext(RequestContext request, EntityManager entityLoader,
 			EntityDefinitionManager definitionLoader) {
-		super(request);
-		this.entityManager = entityLoader;
-		this.definitionManager = definitionLoader;
+		super(request, entityLoader, definitionLoader);
 
+		init();
+	}
+
+	public DetailCommandContext(RequestContext request, String defName, String viewName, EntityManager entityLoader,
+			EntityDefinitionManager definitionLoader) {
+		super(request, defName, viewName, entityLoader, definitionLoader);
+
+		init();
+	}
+	
+	private void init() {
 		gemConfig = ServiceRegistry.getRegistry().getService(GemConfigService.class);
-		ucdm = ManagerLocator.getInstance().getManager(UtilityClassDefinitionManager.class);
 	}
 
 	/**
 	 * 編集画面用のFormレイアウト情報を取得します。
 	 * @return 編集画面用のFormレイアウト情報
 	 */
+	@SuppressWarnings("unchecked")
+	@Override
 	public DetailFormView getView() {
 		String viewName = getViewName();
 		if (view == null) {
@@ -162,23 +141,55 @@ public class DetailCommandContext extends GenericCommandContext {
 		this.view = view;
 	}
 
+	@Override
+	protected String getInterrupterName() {
+		return getView().getInterrupterName();
+	}
+
+	@Override
+	protected String getLoadEntityInterrupterName() {
+		return getView().getLoadEntityInterrupterName();
+	}
+
+	@SuppressWarnings("unchecked")
+	@Override
+	protected RegistrationPropertyBaseHandler<PropertyItem> createRegistrationPropertyBaseHandler() {
+		return new RegistrationPropertyBaseHandler<PropertyItem>() {
+			@Override
+			public boolean isDispProperty(PropertyItem property) {
+				//詳細編集で非表示なら更新対象外
+				return EntityViewUtil.isDisplayElement(entityDefinition.getName(), property.getElementRuntimeId(), OutputType.EDIT)
+						&& !property.isHideDetail();
+			}
+
+			@Override
+			public PropertyEditor getEditor(PropertyItem property) {
+				return property.getEditor();
+			}
+		};
+	}
+
 	/**
 	 * フォーム内のプロパティを取得します。
 	 * @param view 画面定義
 	 * @return プロパティの一覧
 	 */
+	@SuppressWarnings("unchecked")
+	@Override
 	public List<PropertyItem> getProperty() {
 		String execType = getExecType();
 		List<PropertyItem> propList = new ArrayList<PropertyItem>();
 		for (Section section : getView().getSections()) {
 			if (section instanceof DefaultSection) {
-				if (section.isDispFlag() && !((DefaultSection) section).isHideDetail() && ViewUtil.dispElement(execType, section)) {
+				if (EntityViewUtil.isDisplayElement(getDefinitionName(), section.getElementRuntimeId(), OutputType.EDIT)
+						&& !((DefaultSection) section).isHideDetail() && ViewUtil.dispElement(execType, section)) {
 					propList.addAll(getProperty((DefaultSection) section));
 				}
 			} else if (section instanceof ReferenceSection) {
 				// 参照セクションは同一名の定義が複数の場合があるのでまとめる
 				ReferenceSection rs = (ReferenceSection) section;
-				if (rs.isDispFlag() && !rs.isHideDetail() && ViewUtil.dispElement(execType, rs)) {
+				if (EntityViewUtil.isDisplayElement(getDefinitionName(), section.getElementRuntimeId(), OutputType.EDIT)
+						&& !rs.isHideDetail() && ViewUtil.dispElement(execType, rs)) {
 					Optional<ReferenceSectionPropertyItem> ret = propList.stream().filter(p -> p instanceof ReferenceSectionPropertyItem)
 						.map(p -> (ReferenceSectionPropertyItem) p)
 						.filter(p -> p.getPropertyName().equals(rs.getPropertyName()))
@@ -187,7 +198,7 @@ public class DetailCommandContext extends GenericCommandContext {
 					if (ret.isPresent()) {
 						ret.get().getSections().add(rs);
 					} else {
-						propList.add(getReferenceSectionPropertyItem(rs));
+						propList.add(createReferenceSectionPropertyItem(rs));
 					}
 				}
 			}
@@ -200,13 +211,14 @@ public class DetailCommandContext extends GenericCommandContext {
 	 * @param section セクション
 	 * @return プロパティの一覧
 	 */
+	@SuppressWarnings("unchecked")
 	private List<PropertyItem> getProperty(DefaultSection section) {
 		String execType = getExecType();
 		List<PropertyItem> propList = new ArrayList<PropertyItem>();
 		for (Element elem : section.getElements()) {
 			if (elem instanceof PropertyItem) {
 				PropertyItem prop = (PropertyItem) elem;
-				if (prop.isDispFlag() && !prop.isHideDetail() && ViewUtil.dispElement(execType, prop)) {
+				if (getRegistrationPropertyBaseHandler().isDispProperty(prop) && ViewUtil.dispElement(execType, prop)) {
 					if (prop.getEditor() instanceof JoinPropertyEditor) {
 						//組み合わせで使うプロパティを通常のプロパティ扱いに
 						JoinPropertyEditor je = (JoinPropertyEditor) prop.getEditor();
@@ -229,13 +241,15 @@ public class DetailCommandContext extends GenericCommandContext {
 					propList.add(prop);
 				}
 			} else if (elem instanceof DefaultSection) {
-				if (elem.isDispFlag() && !((DefaultSection) elem).isHideDetail() && ViewUtil.dispElement(execType, elem)) {
+				if (EntityViewUtil.isDisplayElement(getDefinitionName(), elem.getElementRuntimeId(), OutputType.EDIT)
+						&& !((DefaultSection) elem).isHideDetail() && ViewUtil.dispElement(execType, elem)) {
 					propList.addAll(getProperty((DefaultSection) elem));
 				}
 			} else if (elem instanceof ReferenceSection) {
 				// 参照セクションは同一名の定義が複数の場合があるのでまとめる
 				ReferenceSection rs = (ReferenceSection) elem;
-				if (rs.isDispFlag() && !rs.isHideDetail() && ViewUtil.dispElement(execType, rs)) {
+				if (EntityViewUtil.isDisplayElement(getDefinitionName(), elem.getElementRuntimeId(), OutputType.EDIT)
+						&& !rs.isHideDetail() && ViewUtil.dispElement(execType, rs)) {
 					Optional<ReferenceSectionPropertyItem> ret = propList.stream().filter(p -> p instanceof ReferenceSectionPropertyItem)
 						.map(p -> (ReferenceSectionPropertyItem) p)
 						.filter(p -> p.getPropertyName().equals(rs.getPropertyName()))
@@ -244,7 +258,7 @@ public class DetailCommandContext extends GenericCommandContext {
 					if (ret.isPresent()) {
 						ret.get().getSections().add(rs);
 					} else {
-						propList.add(getReferenceSectionPropertyItem(rs));
+						propList.add(createReferenceSectionPropertyItem(rs));
 					}
 				}
 			}
@@ -257,7 +271,7 @@ public class DetailCommandContext extends GenericCommandContext {
 	 * @param section セクション
 	 * @return プロパティ
 	 */
-	private PropertyItem getReferenceSectionPropertyItem(ReferenceSection section) {
+	private ReferenceSectionPropertyItem createReferenceSectionPropertyItem(ReferenceSection section) {
 		ReferenceSectionPropertyItem property = new ReferenceSectionPropertyItem();
 		property.setPropertyName(section.getPropertyName());
 //		property.setDispFlag(section.getDispFlag());
@@ -294,6 +308,15 @@ public class DetailCommandContext extends GenericCommandContext {
 					//大量データ用のPropertyEditorを使わない参照プロパティのみ
 					loadReferences.add(property.getPropertyName());
 				}
+				if (property.getEditor() instanceof JoinPropertyEditor) {
+					JoinPropertyEditor jpe = (JoinPropertyEditor) property.getEditor();
+					for (NestProperty nest : jpe.getProperties()) {
+						//JoinPropertyエディターのネストプロパティでの参照プロパティ
+						if (nest.getEditor() instanceof ReferencePropertyEditor) {
+							loadReferences.add(nest.getPropertyName());
+						}
+					}
+				}
 			} else if (element instanceof DefaultSection) {
 				getReferencePropertyName((DefaultSection) element, loadReferences);
 			} else if (element instanceof ReferenceSection) {
@@ -303,31 +326,6 @@ public class DetailCommandContext extends GenericCommandContext {
 				}
 			}
 		}
-	}
-
-	/**
-	 * 更新可能な被参照（ネストテーブル、参照セクション）を定義内に保持しているかを取得します。
-	 * @return
-	 */
-	public boolean hasUpdatableMappedByReference() {
-		List<PropertyItem> properties = getProperty();
-		for (PropertyItem property : properties) {
-			PropertyDefinition pd = getProperty(property.getPropertyName());
-			if (pd instanceof ReferenceProperty) {
-				String mappedBy = ((ReferenceProperty) pd).getMappedBy();
-				if (StringUtil.isBlank(mappedBy)) continue;
-
-				if (property instanceof ReferenceSectionPropertyItem) {
-					return true;
-				} else if (property.getEditor() instanceof ReferencePropertyEditor) {
-					ReferencePropertyEditor editor = (ReferencePropertyEditor) property.getEditor();
-					if (editor.getDisplayType() == ReferenceDisplayType.NESTTABLE) {
-						return true;
-					}
-				}
-			}
-		}
-		return false;
 	}
 
 	// 同一プロパティの参照セクションをまとめておくPropertyItem
@@ -357,7 +355,9 @@ public class DetailCommandContext extends GenericCommandContext {
 		public boolean isDispFlag() {
 			// dispFlagがfalseのものがあればfalse扱い
 			for (ReferenceSection section : sections) {
-				if (!section.isDispFlag()) return false;
+				if (!EntityViewUtil.isDisplayElement(getDefinitionName(), section.getElementRuntimeId(), OutputType.EDIT)) {
+					return false;
+				}
 			}
 			return true;
 		}
@@ -370,108 +370,6 @@ public class DetailCommandContext extends GenericCommandContext {
 			}
 			return true;
 		}
-	}
-
-	/**
-	 * カスタム登録処理を取得します。
-	 * @return カスタム登録処理
-	 */
-	public RegistrationInterrupterHandler getRegistrationInterrupterHandler() {
-		if (interrupterHandler == null) {
-			RegistrationInterrupter interrupter = createInterrupter(getView().getInterrupterName());
-			interrupterHandler = new RegistrationInterrupterHandler(request, this, interrupter);
-		}
-		return interrupterHandler;
-	}
-
-	private RegistrationInterrupter createInterrupter(String className) {
-		RegistrationInterrupter interrupter = null;
-		if (StringUtil.isNotEmpty(className)) {
-			log.debug("set registration interrupter. class=" + className);
-			try {
-				interrupter = ucdm.createInstanceAs(RegistrationInterrupter.class, className);
-			} catch (ClassNotFoundException e) {
-				log.error(className + " can not instantiate.", e);
-				throw new ApplicationException(resourceString("command.generic.detail.DetailCommandContext.internalErr"));
-			}
-		}
-		if (interrupter == null) {
-			//何もしないデフォルトInterrupter生成
-			log.debug("set defaul registration interrupter.");
-			interrupter = new RegistrationInterrupter() {
-
-				@Override
-				public boolean isSpecifyAllProperties() { return false; }
-
-				@Override
-				public String[] getAdditionalProperties() { return new String[]{}; }
-
-				@Override
-				public void dataMapping(Entity entity, RequestContext request,
-						EntityDefinition definition, DetailFormView view) {
-				}
-
-				@Override
-				public List<ValidateError> beforeRegist(Entity entity,
-						RequestContext request, EntityDefinition definition,
-						DetailFormView view, RegistrationType registrationType) {
-					return Collections.emptyList();
-				}
-
-				@Override
-				public List<ValidateError> afterRegist(Entity entity,
-						RequestContext request, EntityDefinition definition,
-						DetailFormView view, RegistrationType registType) {
-					return Collections.emptyList();
-				}
-			};
-		}
-		return interrupter;
-	}
-
-	/**
-	 * カスタムロード処理を取得します。
-	 * @return カスタムロード処理
-	 */
-	public LoadEntityInterrupterHandler getLoadEntityInterrupterHandler() {
-		if (loadEntityInterrupterHandler == null) {
-			LoadEntityInterrupter interrupter = createLoadEntityInterrupter(getView().getLoadEntityInterrupterName());
-			loadEntityInterrupterHandler = new LoadEntityInterrupterHandler(request, this, interrupter);
-		}
-		return loadEntityInterrupterHandler;
-	}
-
-	private LoadEntityInterrupter createLoadEntityInterrupter(String className) {
-		LoadEntityInterrupter interrupter = null;
-		if (StringUtil.isNotEmpty(className)) {
-			log.debug("set load entity interrupter. class=" + className);
-			try {
-				interrupter = ucdm.createInstanceAs(LoadEntityInterrupter.class, className);
-			} catch (ClassNotFoundException e) {
-				log.error(className + " can not instantiate.", e);
-				throw new ApplicationException(resourceString("command.generic.detail.DetailCommandContext.internalErr"));
-			}
-		}
-		if (interrupter == null) {
-			//何もしないデフォルトInterrupter生成
-			log.debug("set defaul load entity interrupter.");
-			interrupter = new LoadEntityInterrupter() {
-
-				@Override
-				public LoadEntityContext beforeLoadEntity(RequestContext request, DetailFormView view, String defName,
-						LoadOption loadOption, LoadType type) {
-					return new LoadEntityContext(loadOption);
-				}
-
-				@Override
-				public LoadEntityContext beforeLoadReference(RequestContext request, DetailFormView view, String defName,
-						LoadOption loadOption, ReferenceProperty property, LoadType type) {
-					return new LoadEntityContext(loadOption);
-				}
-
-			};
-		}
-		return interrupter;
 	}
 
 	/**
@@ -512,16 +410,58 @@ public class DetailCommandContext extends GenericCommandContext {
 		if (copyTarget == null || copyTarget.isEmpty()) {
 			return CopyTarget.SHALLOW;
 		}
-		return CopyTarget.valueOf(copyTarget);
+		return CopyTarget.getEnum(copyTarget);
 	}
 
 	/**
 	 * 新しいバージョンとして更新を行うかを取得します。
 	 * @return 新しいバージョンとして更新を行うか
 	 */
+	@Override
 	public boolean isNewVersion() {
 		String newVersion = getParam(Constants.NEWVERSION);
 		return newVersion != null && "true".equals(newVersion);
+	}
+
+	@Override
+	protected boolean isPurgeCompositionedEntity() {
+		return getView().isPurgeCompositionedEntity();
+	}
+
+	@Override
+	protected boolean isLocalizationData() {
+		return getView().isLocalizationData();
+	}
+
+	@Override
+	protected boolean isForceUpadte() {
+		return getView().isForceUpadte();
+	}
+
+	/**
+	 * 更新可能な被参照（ネストテーブル、参照セクション）を定義内に保持しているかを取得します。
+	 * @return
+	 */
+	@Override
+	public boolean hasUpdatableMappedByReference() {
+		List<PropertyItem> properties = getProperty();
+		for (PropertyItem property : properties) {
+			PropertyDefinition pd = getProperty(property.getPropertyName());
+			if (pd instanceof ReferenceProperty) {
+				String mappedBy = ((ReferenceProperty) pd).getMappedBy();
+				if (StringUtil.isBlank(mappedBy)) continue;
+
+				if (property instanceof ReferenceSectionPropertyItem) {
+					return true;
+				} else if (property.getEditor() instanceof ReferencePropertyEditor) {
+					ReferencePropertyEditor editor = (ReferencePropertyEditor) property.getEditor();
+					if (editor.getDisplayType() == ReferenceDisplayType.NESTTABLE) {
+						return true;
+					}
+				}
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -583,44 +523,11 @@ public class DetailCommandContext extends GenericCommandContext {
 	private Entity createEntity(String paramPrefix, String errorPrefix) {
 		Entity entity = newEntity();
 		for (PropertyDefinition p : getPropertyList()) {
-			Object value = null;
-			boolean isMultiple = p.getMultiplicity() != 1;
-			String name = paramPrefix +  p.getName();
-			if (p instanceof BinaryProperty) {
-				value = isMultiple ? getBinaryReferenceValues(name) : getBinaryReferenceValue(name);
-			} else if (p instanceof BooleanProperty) {
-				value = isMultiple ? getBooleanValues(name, p.getMultiplicity()) : getBooleanValue(name);
-			} else if (p instanceof DateProperty) {
-				value = isMultiple ? getDateValues(name) : getDateValue(name);
-			} else if (p instanceof DateTimeProperty) {
-				value = isMultiple ? getTimestampValues(name) : getTimestampValue(name);
-			} else if (p instanceof DecimalProperty) {
-				value = isMultiple ? getDecimalValues(name) : getDecimalValue(name);
-			} else if (p instanceof ExpressionProperty) {
-				//数式型は更新プロパティに含めない
-				value = getExpressionValue((ExpressionProperty) p, name);
-			} else if (p instanceof FloatProperty) {
-				value = isMultiple ? getDoubleValues(name) : getDoubleValue(name);
-			} else if (p instanceof IntegerProperty) {
-				value = isMultiple ? getLongValues(name) : getLongValue(name);
-			} else if (p instanceof LongTextProperty) {
-				value = isMultiple ? getStringValues(name) : getStringValue(name);
-			} else if (p instanceof ReferenceProperty) {
-				value = createReference(p, paramPrefix);
-			} else if (p instanceof SelectProperty) {
-				value = isMultiple ? getSelectValues(name) : getSelectValue(name);
-			} else if (p instanceof StringProperty) {
-				value = isMultiple ? getStringValues(name) : getStringValue(name);
-			} else if (p instanceof TimeProperty) {
-				value = isMultiple ? getTimeValues(name) : getTimeValue(name);
-			} else if (p instanceof AutoNumberProperty) {
-				//AutoNumber型は更新プロパティに含めない
-				value = getStringValue(name);
-			}
-
+			Object value = getPropValue(p, paramPrefix);
 			entity.setValue(p.getName(), value);
 
 			if (errorPrefix != null) {
+				String name = paramPrefix + p.getName();
 				//Entity生成時にエラーが発生していないかチェックして置き換え
 				String errorName = errorPrefix +  p.getName();
 				getErrors().stream()
@@ -631,138 +538,11 @@ public class DetailCommandContext extends GenericCommandContext {
 		return entity;
 	}
 
-	private Entity newEntity() {
-		Entity res = null;
-		if (entityDefinition.getMapping() != null && entityDefinition.getMapping().getMappingModelClass() != null) {
-			try {
-				res = (Entity) Class.forName(entityDefinition.getMapping().getMappingModelClass()).newInstance();
-			} catch (InstantiationException e) {
-				throw new EntityRuntimeException(e);
-			} catch (IllegalAccessException e) {
-				throw new EntityRuntimeException(e);
-			} catch (ClassNotFoundException e) {
-				throw new EntityRuntimeException(e);
-			}
-		} else {
-			res = new GenericEntity();
-		}
-		res.setDefinitionName(entityDefinition.getName());
-		return res;
-	}
-
 	private Timestamp getTimestamp() {
 		Timestamp ts = null;
 		Long l = getLongValue(Constants.TIMESTAMP);
 		if (l != null) ts = new Timestamp(l);
 		return ts;
-	}
-
-	private BinaryReference getBinaryReferenceValue(String name) {
-		BinaryReference br = null;
-		Long lobId = getLongValue(name);
-		if (lobId != null) {
-			//バリデーションエラー時に消えないようにデータ読み込み
-			br = entityManager.loadBinaryReference(lobId);
-		}
-		return br;
-	}
-
-	private BinaryReference[] getBinaryReferenceValues(String name) {
-		Long[] params = getLongValues(name);
-		List<BinaryReference> list = new ArrayList<BinaryReference>();
-		if (params != null) {
-			for (Long lobId : params) {
-				if (lobId != null) {
-					//バリデーションエラー時に消えないようにデータ読み込み
-					BinaryReference br = entityManager.loadBinaryReference(lobId);
-					br.setLobId(lobId);
-					list.add(br);
-				}
-			}
-		}
-		return list.toArray(new BinaryReference[list.size()]);
-	}
-
-	private Boolean getBooleanValue(String name) {
-		String param = getParam(name);
-		String type = getParam(name + "Type");
-		Boolean ret = null;
-		if ("Select".equals(type) || "Label".equals(type)) {
-			//未選択時は空文字→nullで登録
-			ret = StringUtil.isNotBlank(param) ? Boolean.parseBoolean(param) : null;
-		} else {
-			ret = param != null ? Boolean.parseBoolean(param) : null;
-
-			//チェックボックス未チェック時はNullになるがfalseに置き換える
-			if (ret == null && "Checkbox".equals(type)) ret = false;
-		}
-		return ret;
-	}
-	private Boolean[] getBooleanValues(String name, int multiplicity) {
-		List<Boolean> list = new ArrayList<Boolean>();
-		String type = getParam(name + "Type");
-		if ("Select".equals(type)) {
-			String[] params = getParams(name);
-			if (params != null) {
-				for (String value : params) {
-					list.add(Boolean.parseBoolean(value));
-				}
-			}
-		} else if ("Label".equals(type)){
-			String[] params = getParams(name);
-			if (params != null) {
-				for (String value : params) {
-					if (StringUtil.isNotBlank(value)) list.add(Boolean.parseBoolean(value));
-				}
-			}
-		} else {
-			//同一名で取得できないので個別に取得
-			for (int i = 0; i < multiplicity; i++) {
-				String param = getParam(name + i);
-				Boolean b = param != null ? Boolean.parseBoolean(param) : null;
-				if (b == null && "Checkbox".equals(type)) b = false;
-				list.add(b);
-			}
-		}
-		return list.toArray(new Boolean[list.size()]);
-	}
-
-	private SelectValue getSelectValue(String name) {
-		String param = getParam(name);
-		SelectValue ret = null;
-		if (StringUtil.isNotBlank(param)) {
-			ret = new SelectValue(param);
-		}
-		return ret;
-	}
-
-	private SelectValue[] getSelectValues(String name) {
-		String[] params = getParams(name);
-		List<SelectValue> list = new ArrayList<SelectValue>();
-		if (params != null) {
-			for (String value : params) {
-				list.add(new SelectValue(value));
-			}
-		}
-		return list.toArray(new SelectValue[list.size()]);
-	}
-
-	private String getStringValue(String name) {
-		String value = getParam(name);
-		if (StringUtil.isBlank(value)) {
-			return null;
-		} else {
-			return value;
-		}
-	}
-
-	private String[] getStringValues(String name) {
-		String[] params = getParams(name);
-		if (params == null || params.length == 0) {
-			return new String[0];
-		} else {
-			return params;
-		}
 	}
 
 	/**
@@ -771,9 +551,11 @@ public class DetailCommandContext extends GenericCommandContext {
 	 * @param prefix 参照型のプロパティのリクエストパラメータに設定されているプレフィックス
 	 * @return プロパティの値
 	 */
-	private Object createReference(PropertyDefinition p, String prefix) {
-		ReferenceProperty rp = (ReferenceProperty) p;
-		String defName = rp.getObjectDefinitionName();
+	@Override
+	protected Object createReference(PropertyDefinition p, String prefix) {
+		final ReferenceProperty rp = (ReferenceProperty) p;
+		final String defName = rp.getObjectDefinitionName();
+
 		//NestTable、ReferenceSectionの場合の件数取得
 		//prefixが付くケース=NestTable内の多重参照なのであり得ない
 		//→件数取れないため通常の参照扱いで処理が終わる
@@ -795,14 +577,14 @@ public class DetailCommandContext extends GenericCommandContext {
 			}
 			return entity;
 		} else {
-			List<Entity> list = new ArrayList<Entity>();
+			List<Entity> list = null;
 			if (count == null) {
 				String[] params = getParams(prefix + p.getName());
 				if (params != null) {
-					for (String key : params) {
-						Entity entity = getRefEntity(rp.getObjectDefinitionName(), key);
-						if (entity != null) list.add(entity);
-					}
+					list = Arrays.stream(params)
+							.map(key -> getRefEntity(rp.getObjectDefinitionName(), key))
+							.filter(value -> value != null)
+							.collect(Collectors.toList());
 				}
 			} else {
 				//参照型で参照先のデータを作成・編集するケース
@@ -813,15 +595,19 @@ public class DetailCommandContext extends GenericCommandContext {
 				}
 			}
 
-			//マッピングクラスの配列を生成する
-			Object[] array = null;
-			EntityDefinition ed = getEntityDefinition();
-			setEntityDefinition(definitionManager.get(defName));
-			Entity emptyEntity = newEntity();
-			setEntityDefinition(ed);
+			if (list != null && !list.isEmpty()) {
+				//マッピングクラスの配列を生成する
+				EntityDefinition ed = getEntityDefinition();
+				setEntityDefinition(definitionManager.get(defName));
+				Entity emptyEntity = newEntity();
+				setEntityDefinition(ed);
 
-			array = (Object[]) Array.newInstance(emptyEntity.getClass(), list.size());
-			return list.toArray(array);
+				Object[] array = (Object[]) Array.newInstance(emptyEntity.getClass(), list.size());
+				return list.toArray(array);
+
+			} else {
+				return null;
+			}
 		}
 	}
 
@@ -909,7 +695,7 @@ public class DetailCommandContext extends GenericCommandContext {
 
 	private void addNestTableRegistHandler(ReferenceProperty p, List<Entity> list, EntityDefinition red, PropertyItem property) {
 		// ネストテーブルはプロパティ単位で登録可否決定
-		if (!NestTableReferenceRegistHandler.canRegist(property)) return;
+		if (!NestTableReferenceRegistHandler.canRegist(property, getRegistrationPropertyBaseHandler())) return;
 
 		ReferencePropertyEditor editor = (ReferencePropertyEditor) property.getEditor();
 
@@ -925,9 +711,10 @@ public class DetailCommandContext extends GenericCommandContext {
 			target = list;
 		}
 
-		ReferenceRegistHandler handler = NestTableReferenceRegistHandler.get(this, list, red, p, property, editor.getNestProperties());
+		ReferenceRegistHandler handler = NestTableReferenceRegistHandler.get(this, list, red, p, property, editor.getNestProperties(), getRegistrationPropertyBaseHandler());
 		if (handler != null) {
-			referenceRegistHandlers.add(handler);
+			handler.setForceUpdate(editor.isForceUpadte());
+			getReferenceRegistHandlers().add(handler);
 		}
 	}
 
@@ -1016,7 +803,8 @@ public class DetailCommandContext extends GenericCommandContext {
 
 		ReferenceRegistHandler handler = ReferenceSectionReferenceRegistHandler.get(this, list, red, p, property);
 		if (handler != null) {
-			referenceRegistHandlers.add(handler);
+			//handler.setForceUpdate(forceUpadte); //参照セクションはSection毎に個別設定になるので、Handler内で設定
+			getReferenceRegistHandlers().add(handler);
 		}
 	}
 
@@ -1050,46 +838,6 @@ public class DetailCommandContext extends GenericCommandContext {
 			}
 		}
 		return true;
-	}
-
-
-	private Object getExpressionValue(ExpressionProperty ep, String name) {
-
-		//値の型とEditorの種類で取得する型を変える
-		String editorType = getParam(name + "_editorType");
-		if (editorType != null) {
-			if (ep.getResultType() == PropertyDefinitionType.BOOLEAN
-					&& BooleanPropertyEditor.class.getSimpleName().equals(editorType)) {
-				return getBooleanValue(name);
-			} else if (ep.getResultType() == PropertyDefinitionType.DATE
-					&& DatePropertyEditor.class.getSimpleName().equals(editorType)) {
-				return getDateValue(name);
-			} else if (ep.getResultType() == PropertyDefinitionType.DATETIME
-					&& TimestampPropertyEditor.class.getSimpleName().equals(editorType)) {
-				return getTimestampValue(name);
-			} else if (ep.getResultType() == PropertyDefinitionType.DECIMAL
-					&& DecimalPropertyEditor.class.getSimpleName().equals(editorType)) {
-				return getDecimalValue(name);
-			} else if (ep.getResultType() == PropertyDefinitionType.FLOAT
-					&& FloatPropertyEditor.class.getSimpleName().equals(editorType)) {
-				return getDoubleValue(name);
-			} else if (ep.getResultType() == PropertyDefinitionType.INTEGER
-					&& IntegerPropertyEditor.class.getSimpleName().equals(editorType)) {
-				return getLongValue(name);
-			} else if (ep.getResultType() == PropertyDefinitionType.SELECT
-					&& SelectPropertyEditor.class.getSimpleName().equals(editorType)) {
-				return getSelectValue(name);
-			} else if (ep.getResultType() == PropertyDefinitionType.STRING
-					&& StringPropertyEditor.class.getSimpleName().equals(editorType)) {
-				return getStringValue(name);
-			} else if (ep.getResultType() == PropertyDefinitionType.TIME
-					&& TimePropertyEditor.class.getSimpleName().equals(editorType)) {
-				return getTimeValue(name);
-			}
-		}
-
-		//上記にはまらないのは文字列扱い
-		return getStringValue(name);
 	}
 
 	private void setVirtualPropertyValue(Entity entity) {
@@ -1128,12 +876,13 @@ public class DetailCommandContext extends GenericCommandContext {
 	 * @param view 画面定義
 	 * @return 仮想プロパティの一覧
 	 */
-	public List<VirtualPropertyItem> getVirtualProperty() {
+	private List<VirtualPropertyItem> getVirtualProperty() {
 		String execType = getExecType();
 		List<VirtualPropertyItem> propList = new ArrayList<VirtualPropertyItem>();
 		for (Section section : getView().getSections()) {
 			if (section instanceof DefaultSection) {
-				if (section.isDispFlag() && !((DefaultSection) section).isHideDetail() && ViewUtil.dispElement(execType, section)) {
+				if (EntityViewUtil.isDisplayElement(getDefinitionName(), section.getElementRuntimeId(), OutputType.EDIT)
+						&& !((DefaultSection) section).isHideDetail() && ViewUtil.dispElement(execType, section)) {
 					propList.addAll(getVirtualProperty((DefaultSection) section));
 				}
 			}
@@ -1152,11 +901,13 @@ public class DetailCommandContext extends GenericCommandContext {
 		for (Element elem : section.getElements()) {
 			if (elem instanceof VirtualPropertyItem) {
 				VirtualPropertyItem prop = (VirtualPropertyItem) elem;
-				if (prop.isDispFlag() && !prop.isHideDetail() && ViewUtil.dispElement(execType, prop)) {
+				if (EntityViewUtil.isDisplayElement(getDefinitionName(), prop.getElementRuntimeId(), OutputType.EDIT)
+						&& !prop.isHideDetail() && ViewUtil.dispElement(execType, prop)) {
 					propList.add(prop);
 				}
 			} else if (elem instanceof DefaultSection) {
-				if (elem.isDispFlag() && !((DefaultSection) elem).isHideDetail() && ViewUtil.dispElement(execType, elem)) {
+				if (EntityViewUtil.isDisplayElement(getDefinitionName(), elem.getElementRuntimeId(), OutputType.EDIT)
+						&& !((DefaultSection) elem).isHideDetail() && ViewUtil.dispElement(execType, elem)) {
 					propList.addAll(getVirtualProperty((DefaultSection) elem));
 				}
 			}
@@ -1262,7 +1013,7 @@ public class DetailCommandContext extends GenericCommandContext {
 	 * 標準の入力チェック以外のチェック、PropertyEditor絡みのもの
 	 * @param entity
 	 */
-	private void validate(Entity entity) {
+	protected void validate(Entity entity) {
 		List<PropertyItem> properties = getDisplayProperty(true);
 		for (PropertyItem property : properties) {
 			if (property.getEditor() instanceof DateRangePropertyEditor) {
@@ -1333,8 +1084,11 @@ public class DetailCommandContext extends GenericCommandContext {
 		List<PropertyItem> propList = new ArrayList<PropertyItem>();
 
 		String execType = getExecType();
+		OutputType outputType = isDetail ? OutputType.EDIT : OutputType.VIEW;
 		for (Section section : getView().getSections()) {
-			if (!section.isDispFlag()) continue;
+			if (!EntityViewUtil.isDisplayElement(getDefinitionName(), section.getElementRuntimeId(), outputType)) {
+				continue;
+			}
 
 			if (section instanceof DefaultSection) {
 				DefaultSection ds = (DefaultSection) section;
@@ -1344,7 +1098,7 @@ public class DetailCommandContext extends GenericCommandContext {
 			} else if (section instanceof ReferenceSection) {
 				ReferenceSection rs = (ReferenceSection) section;
 				if ((isDetail && !rs.isHideDetail() && ViewUtil.dispElement(execType, rs)) || (!isDetail && !rs.isHideView())) {
-					propList.add(getDisplayProperty(rs, isDetail));
+					propList.add(getDisplayProperty(rs, outputType));
 				}
 			}
 		}
@@ -1361,8 +1115,11 @@ public class DetailCommandContext extends GenericCommandContext {
 		List<PropertyItem> propList = new ArrayList<PropertyItem>();
 
 		String execType = getExecType();
+		OutputType outputType = isDetail ? OutputType.EDIT : OutputType.VIEW;
 		for (Element elem : section.getElements()) {
-			if (!elem.isDispFlag()) continue;
+			if (!EntityViewUtil.isDisplayElement(getDefinitionName(), elem.getElementRuntimeId(), outputType)) {
+				continue;
+			}
 
 			if (elem instanceof PropertyItem) {
 				PropertyItem prop = (PropertyItem) elem;
@@ -1388,7 +1145,7 @@ public class DetailCommandContext extends GenericCommandContext {
 			} else if (elem instanceof ReferenceSection) {
 				ReferenceSection rs = (ReferenceSection) elem;
 				if ((isDetail && !rs.isHideDetail() && ViewUtil.dispElement(execType, rs)) || (!isDetail && !rs.isHideView())) {
-					propList.add(getDisplayProperty(rs, isDetail));
+					propList.add(getDisplayProperty(rs, outputType));
 				}
 			}
 		}
@@ -1401,10 +1158,12 @@ public class DetailCommandContext extends GenericCommandContext {
 	 * @param isDetail true:詳細編集、false:詳細表示
 	 * @return プロパティ
 	 */
-	private PropertyItem getDisplayProperty(ReferenceSection section, boolean isDetail) {
+	private PropertyItem getDisplayProperty(ReferenceSection section, OutputType outputType) {
+
 		PropertyItem property = new PropertyItem();
 		property.setPropertyName(section.getPropertyName());
-		property.setDispFlag(section.isDispFlag());
+		property.setDispFlag(EntityViewUtil.isDisplayElement(getDefinitionName(), section.getElementRuntimeId(), outputType));
+
 		ReferencePropertyEditor editor = new ReferencePropertyEditor();
 		editor.setDisplayType(ReferenceDisplayType.NESTTABLE);
 		editor.setObjectName(section.getDefintionName());
@@ -1413,52 +1172,4 @@ public class DetailCommandContext extends GenericCommandContext {
 		return property;
 	}
 
-	public void setAttribute(String name, Object value) {
-		getRequest().setAttribute(name, value);
-	}
-
-	public Object getAttribute(String name) {
-		return getRequest().getAttribute(name);
-	}
-
-	@Override
-	public void addError(ValidateError error) {
-		for (ValidateError e : getErrors()) {
-			//同じプロパティのものがあればメッセージだけ追加
-			if (e.getPropertyName().equals(error)) {
-				e.getErrorMessages().addAll(error.getErrorMessages());
-				return;
-			}
-		}
-
-		//同じプロパティがない場合はエラー自体を追加
-		getErrors().add(error);
-	}
-
-	@Override
-	public List<ValidateError> getErrors() {
-		if (errors == null) errors = new ArrayList<ValidateError>();
-		return errors;
-	}
-
-	@Override
-	public boolean hasErrors() {
-		return errors == null ? false : !errors.isEmpty();
-	}
-
-	public void regist(ReferenceRegistHandlerFunction function, Entity inputEntity, Entity loadedEntity) {
-		for (ReferenceRegistHandler handler : referenceRegistHandlers) {
-			handler.regist(function, inputEntity, loadedEntity);
-		}
-	}
-
-	public void registMappedby(ReferenceRegistHandlerFunction fucntion, Entity inputEntity, Entity loadedEntity) {
-		for (ReferenceRegistHandler handler : referenceRegistHandlers) {
-			handler.registMappedby(fucntion, inputEntity, loadedEntity);
-		}
-	}
-
-	private static String resourceString(String key, Object... arguments) {
-		return GemResourceBundleUtil.resourceString(key, arguments);
-	}
 }

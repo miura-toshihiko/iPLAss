@@ -24,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.iplass.adminconsole.shared.base.dto.KeyValue;
 import org.iplass.adminconsole.shared.base.dto.i18n.I18nMetaDisplayInfo;
 import org.iplass.adminconsole.shared.metadata.dto.AdminDefinitionModifyResult;
 import org.iplass.adminconsole.shared.metadata.dto.MetaDataInfo;
@@ -46,6 +47,7 @@ import org.iplass.mtp.definition.SharedConfig;
 import org.iplass.mtp.entity.Entity;
 import org.iplass.mtp.entity.definition.EntityDefinition;
 import org.iplass.mtp.entity.definition.PropertyDefinition;
+import org.iplass.mtp.view.generic.BulkFormView;
 import org.iplass.mtp.view.generic.DetailFormView;
 import org.iplass.mtp.view.generic.SearchFormView;
 import org.iplass.mtp.view.menu.MenuItem;
@@ -151,6 +153,21 @@ public interface MetaDataService extends XsrfProtectedService {
 	 * @param tenantId テナントID
 	 */
 	public void clearAllCache(int tenantId);
+
+	/**
+	 * キャッシュとして保持しているActionのコンテンツキャッシュをクリアします。
+	 *
+	 * @param tenantId テナントID
+	 * @param actionName アクション名
+	 */
+	public void clearActionCache(int tenantId, String actionName);
+
+	/**
+	 * キャッシュとして保持しているActionのコンテンツキャッシュをクリアします。
+	 *
+	 * @param tenantId テナントID
+	 */
+	public void clearTenantActionCache(int tenantId);
 
 	public void updateSharedConfig(int tenantId, String className, String name, SharedConfig config);
 
@@ -272,9 +289,9 @@ public interface MetaDataService extends XsrfProtectedService {
 
 	public List<String> getEntityStoreSpaceList(int tenantId);
 
-	public Long getAutoNumberCurrentValue(int tenantId, String name, String propertyName);
+	public List<KeyValue<String, Long>> getAutoNumberCurrentValueList(int tenantId, String name, String propertyName);
 
-	public void resetAutoNumberCounter(int tenantId, String name, String propertyName, long startsWith);
+	public void resetAutoNumberCounterList(int tenantId, String name, String propertyName, List<KeyValue<String, Long>> values);
 
 	public List<SortInfo> getSortInfo(int tenantId, String orderBy);
 
@@ -289,6 +306,8 @@ public interface MetaDataService extends XsrfProtectedService {
 	public SearchFormView createDefaultSearchFormView(int tenantId, String name);
 
 	public DetailFormView createDefaultDetailFormView(int tenantId, String name);
+
+	public BulkFormView createDefaultBulkFormView(int tenantId, String name);
 
 	public List<Entity> getRoles(int tenantId);
 
@@ -460,4 +479,17 @@ public interface MetaDataService extends XsrfProtectedService {
 	 * @return imageColorList
 	 */
 	public List<String> getImageColorList(int tenantId);
+
+	/* ---------------------------------------
+	 * OAuth
+	 --------------------------------------- */
+
+	public String generateCredentialOAuthClient(final int tenantId, final String definitionName);
+
+	public void deleteOldCredentialOAuthClient(final int tenantId, final String definitionName);
+
+	public String generateCredentialOAuthResourceServer(final int tenantId, final String definitionName);
+
+	public void deleteOldCredentialOAuthResourceServer(final int tenantId, final String definitionName);
+
 }

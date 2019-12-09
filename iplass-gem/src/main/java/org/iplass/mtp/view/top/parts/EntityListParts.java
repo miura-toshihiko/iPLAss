@@ -1,19 +1,19 @@
 /*
  * Copyright (C) 2011 INFORMATION SERVICES INTERNATIONAL - DENTSU, LTD. All Rights Reserved.
- * 
+ *
  * Unless you have purchased a commercial license,
  * the following license terms apply:
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
  * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
@@ -39,7 +39,7 @@ public class EntityListParts extends TemplateParts {
 	private String iconTag;
 
 	/** 高さ */
-	private int height;
+	private Integer height;
 
 	/** 多言語設定情報 */
 	private List<LocalizedStringDefinition> localizedTitleList;
@@ -93,19 +93,35 @@ public class EntityListParts extends TemplateParts {
 	}
 
 	/**
-	 * リンク用のview名を取得します。
-	 * @return リンク用のview名
+	 * 検索リンク用のview名を取得します。
+	 * @return 検索リンク用のview名
 	 */
 	public String getViewNameForLink() {
 		return getParam("viewNameForLink");
 	}
 
 	/**
-	 * リンク用のview名を設定します。
-	 * @param viewName リンク用のview名
+	 * 検索リンク用のview名を設定します。
+	 * @param viewNameForLink 検索リンク用のview名
 	 */
-	public void setViewNameForLink(String viewName) {
-		setParam("viewNameForLink", viewName);
+	public void setViewNameForLink(String viewNameForLink) {
+		setParam("viewNameForLink", viewNameForLink);
+	}
+
+	/**
+	 * 詳細リンク用のView名を取得します。
+	 * @return 詳細リンク用のView名
+	 */
+	public String getViewNameForDetail() {
+		return getParam("viewNameForDetail");
+	}
+
+	/**
+	 * 詳細リンク用のView名を設定します。
+	 * @param viewNameForDetail 詳細リンク用のView名
+	 */
+	public void setViewNameForDetail(String viewNameForDetail) {
+		setParam("viewNameForDetail", viewNameForDetail);
 	}
 
 	/**
@@ -145,7 +161,7 @@ public class EntityListParts extends TemplateParts {
 	 * 高さを取得します。
 	 * @return 高さ
 	 */
-	public int getHeight() {
+	public Integer getHeight() {
 	    return height;
 	}
 
@@ -153,7 +169,7 @@ public class EntityListParts extends TemplateParts {
 	 * 高さを設定します。
 	 * @param height 高さ
 	 */
-	public void setHeight(int height) {
+	public void setHeight(Integer height) {
 	    this.height = height;
 	}
 
@@ -179,7 +195,7 @@ public class EntityListParts extends TemplateParts {
 	 */
 	public void addLocalizedTitle(LocalizedStringDefinition localizedTitle) {
 		if (localizedTitleList == null) {
-			localizedTitleList = new ArrayList<LocalizedStringDefinition>();
+			localizedTitleList = new ArrayList<>();
 		}
 
 		localizedTitleList.add(localizedTitle);

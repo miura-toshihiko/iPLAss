@@ -39,6 +39,7 @@ import org.iplass.gem.command.generic.search.ResponseUtil;
 import org.iplass.gem.command.generic.search.ResponseUtil.Func;
 import org.iplass.mtp.ManagerLocator;
 import org.iplass.mtp.SystemException;
+import org.iplass.mtp.auth.AuthContext;
 import org.iplass.mtp.auth.User;
 import org.iplass.mtp.command.RequestContext;
 import org.iplass.mtp.command.annotation.CommandClass;
@@ -50,6 +51,7 @@ import org.iplass.mtp.entity.definition.EntityDefinition;
 import org.iplass.mtp.entity.definition.EntityDefinitionManager;
 import org.iplass.mtp.entity.definition.PropertyDefinition;
 import org.iplass.mtp.entity.definition.properties.ReferenceProperty;
+import org.iplass.mtp.entity.permission.EntityPermission;
 import org.iplass.mtp.entity.query.OrderBy;
 import org.iplass.mtp.entity.query.Query;
 import org.iplass.mtp.entity.query.SortSpec;
@@ -66,6 +68,7 @@ import org.iplass.mtp.view.generic.EntityViewManager;
 import org.iplass.mtp.view.generic.EntityViewUtil;
 import org.iplass.mtp.view.generic.NullOrderType;
 import org.iplass.mtp.view.generic.OutputType;
+import org.iplass.mtp.view.generic.SearchQueryContext;
 import org.iplass.mtp.view.generic.ViewConst;
 import org.iplass.mtp.view.generic.editor.NestProperty;
 import org.iplass.mtp.view.generic.editor.PropertyEditor;
@@ -115,18 +118,21 @@ public final class GetMassReferencesCommand extends DetailCommandBase {
 	@Override
 	public String execute(RequestContext request) {
 		DetailCommandContext context = getContext(request);
+		String defName = context.getDefinitionName();
 		String propName = request.getParam(Constants.PROP_NAME);
+		String viewName = request.getParam(Constants.VIEW_NAME);
 		String sortKey = request.getParam(Constants.SEARCH_SORTKEY);
 		String sortType = request.getParam(Constants.SEARCH_SORTTYPE);
 		String offsetStr = request.getParam(Constants.SEARCH_OFFSET);
 		String isCount = request.getParam("isCount");
-		String outputType = request.getParam(Constants.OUTPUT_TYPE);
+		String outputTypeStr = request.getParam(Constants.OUTPUT_TYPE);
 		String condKey = request.getParam("condKey");
 		int offset = 0;
 		try {
 			offset = Integer.parseInt(offsetStr);
 		} catch (NumberFormatException e1) {
 		}
+		OutputType outputType = OutputType.valueOf(outputTypeStr);
 
 		//Entity定義取得
 		PropertyDefinition pd = context.getProperty(propName);
@@ -135,7 +141,8 @@ public final class GetMassReferencesCommand extends DetailCommandBase {
 			ReferenceProperty rp = (ReferenceProperty) pd;
 
 			//Section取得
-			List<MassReferenceSection> sections = getMassReferenceSection(context.getEntityDefinition(), context.getView(), context.getViewName());
+			List<MassReferenceSection> sections = getMassReferenceSection(
+					context.getEntityDefinition(), outputType, context.getView(), context.getViewName());
 			MassReferenceSection section = null;
 			for (MassReferenceSection _section : sections) {
 				if (_section.getPropertyName().equals(rp.getName())) {
@@ -145,9 +152,6 @@ public final class GetMassReferencesCommand extends DetailCommandBase {
 			}
 
 			if (section != null) {
-				final Set<String> useUpdatePropertyEditorName = getUseUserPropertyEditorPropertyName(section.getProperties(),
-						OutputType.EDIT.equals(outputType), Entity.LOCKED_BY, Entity.CREATE_BY, Entity.UPDATE_BY);
-
 				List<String> props = new ArrayList<String>();
 				props.add(Entity.OID);
 				props.add(Entity.NAME);
@@ -156,9 +160,9 @@ public final class GetMassReferencesCommand extends DetailCommandBase {
 				EntityDefinition red = edm.get(rp.getObjectDefinitionName());
 				for (NestProperty np : section.getProperties()) {
 					//表示設定確認
-					if (OutputType.EDIT.name().equals(outputType)) {
+					if (OutputType.EDIT == outputType) {
 						if (np.isHideDetail()) continue;
-					} else if (OutputType.VIEW.name().equals(outputType)) {
+					} else if (OutputType.VIEW == outputType) {
 						if (np.isHideView()) continue;
 					}
 
@@ -188,7 +192,7 @@ public final class GetMassReferencesCommand extends DetailCommandBase {
 				query.from(rp.getObjectDefinitionName());
 				And cond = new And(new Equals(rp.getMappedBy() + ".oid", context.getOid()));
 				if (StringUtil.isNotBlank(condKey)) {
-					Condition filterCond = evm.getMassReferenceSectionCondition(context.getDefinitionName(), condKey);
+					Condition filterCond = evm.getMassReferenceSectionCondition(defName, condKey);
 					if (filterCond != null) {
 						cond.addExpression(filterCond);
 					}
@@ -198,7 +202,7 @@ public final class GetMassReferencesCommand extends DetailCommandBase {
 				if (!section.isHidePaging()) {
 					// ページング非表示の場合、件数は不要で、limitもかけずに全件取得
 					if ("true".equals(isCount)) {
-						int count = em.count(query);
+						int count = countEntity(context.getLoadEntityInterrupterHandler(), query, outputType);
 						request.setAttribute("count", count);
 					}
 
@@ -210,31 +214,22 @@ public final class GetMassReferencesCommand extends DetailCommandBase {
 				OrderBy orderBy = getOrderBy(section, red, sortKey, sortType);
 				query.setOrderBy(orderBy);
 
-				final List<Entity> entityList = new ArrayList<>();
-				final List<String> userOidList = new ArrayList<>();
-				em.searchEntity(query, new Predicate<Entity>() {
+				//User名に変換が必要なプロパティを取得
+				final Set<String> userNameProperties = getUseUserPropertyEditorPropertyName(section.getProperties(),
+						OutputType.EDIT == outputType, Entity.LOCKED_BY, Entity.CREATE_BY, Entity.UPDATE_BY);
 
-					@Override
-					public boolean test(Entity dataModel) {
-						if (!useUpdatePropertyEditorName.isEmpty()) {
-							for (String propertyName : useUpdatePropertyEditorName) {
-								String oid = dataModel.getValue(propertyName);
-								if (oid != null && !userOidList.contains(oid)) {
-									userOidList.add(oid);
-								}
-							}
-						}
-						entityList.add(dataModel);
-						return true;
-					}
-				});
+				//UserのOIDリスト
+				final List<String> userOids = new ArrayList<>();
 
-				if (!userOidList.isEmpty()) {
-					setUserInfoMap(context, userOidList);
+				List<Entity> entityList = search(context.getLoadEntityInterrupterHandler(),
+						query, outputType, userNameProperties, userOids);
+
+				if (!userOids.isEmpty()) {
+					setUserInfoMap(context, userOids);
 				}
 
 				try {
-					getHtmlData(request, rp.getObjectDefinitionName(), section.getProperties(), entityList, outputType);
+					getHtmlData(request, defName, viewName, propName, rp, section.getProperties(), entityList, outputType);
 				} catch (IOException e) {
 					throw new SystemException(e);
 				} catch (ServletException e) {
@@ -325,18 +320,88 @@ public final class GetMassReferencesCommand extends DetailCommandBase {
 		return null;
 	}
 
+	private int countEntity(final LoadEntityInterrupterHandler handler, final Query query, final OutputType outputType) {
+
+ 		//検索前処理
+		final SearchQueryContext sqContext = handler.beforeSearchMassReference(query.copy(), outputType);
+
+ 		Integer count = null;
+		if (sqContext.isDoPrivileged()) {
+			//特権実行
+			count = AuthContext.doPrivileged(() -> em.count(sqContext.getQuery()));
+		} else {
+			if (sqContext.getWithoutConditionReferenceName() != null) {
+				count = EntityPermission.doQueryAs(sqContext.getWithoutConditionReferenceName(), () -> em.count(sqContext.getQuery()));
+			} else {
+				count = em.count(sqContext.getQuery());
+			}
+		}
+
+ 		return count;
+	}
+
+	private List<Entity> search(final LoadEntityInterrupterHandler handler, final Query query,
+			final OutputType outputType, final Set<String> userNameProperties, final List<String> userOids) {
+
+ 		//検索前処理
+		final SearchQueryContext sqContext = handler.beforeSearchMassReference(query.copy(), outputType);
+
+ 		List<Entity> result = null;
+		if (sqContext.isDoPrivileged()) {
+			//特権実行
+			result = AuthContext.doPrivileged(() -> {
+				return searchEntity(handler, sqContext.getQuery(), outputType, userNameProperties, userOids);
+			});
+		} else {
+			if (sqContext.getWithoutConditionReferenceName() != null) {
+				result = EntityPermission.doQueryAs(sqContext.getWithoutConditionReferenceName(), () -> {
+					return searchEntity(handler, sqContext.getQuery(), outputType, userNameProperties, userOids);
+				});
+			} else {
+				result = searchEntity(handler, sqContext.getQuery(), outputType, userNameProperties, userOids);
+			}
+		}
+
+ 		return result;
+	}
+
+ 	private List<Entity> searchEntity(final LoadEntityInterrupterHandler handler, final Query query,
+ 			final OutputType outputType, final Set<String> userNameProperties, final List<String> userOids) {
+
+ 		final List<Entity> result = new ArrayList<>();
+		em.searchEntity(query, (entity) -> {
+
+ 			//検索後処理
+			handler.afterSearchMassReference(query, entity, outputType);
+
+ 			//User名が必要な値を取得
+			for (String propertyName : userNameProperties) {
+				String oid = entity.getValue(propertyName);
+				if (oid != null && !userOids.contains(oid)) {
+					userOids.add(oid);
+				}
+			}
+
+ 			result.add(entity);
+			return true;
+		});
+
+ 		return result;
+	}
+
 	/**
 	 * 表示内容をHTMLデータとして取得
 	 * @param request
 	 * @param defName
 	 * @param props
 	 * @param result
+	 * @param outputType
 	 * @throws IOException
 	 * @throws ServletException
 	 */
-	private void getHtmlData(RequestContext request, String defName, List<NestProperty> props, List<Entity> result, String outputType) throws IOException, ServletException {
+	private void getHtmlData(RequestContext request, String defName, String viewName, String propName, ReferenceProperty rp, List<NestProperty> props, List<Entity> result, OutputType outputType) throws IOException, ServletException {
 		List<Map<String, String>> ret = new ArrayList<Map<String,String>>();
-		final EntityDefinition ed = edm.get(defName);
+		final EntityDefinition ed = edm.get(rp.getObjectDefinitionName());
 		for (final Entity entity : result) {
 			final Map<String, String> eval = new LinkedHashMap<String, String>();
 			eval.put("orgOid", entity.getOid());
@@ -360,6 +425,9 @@ public final class GetMassReferencesCommand extends DetailCommandBase {
 								req.setAttribute(Constants.ENTITY_DEFINITION, ed);
 								req.setAttribute(Constants.EDITOR_PROPERTY_DEFINITION, pd);
 								req.setAttribute(Constants.EDITOR_REF_ENTITY_VALUE_MAP, eval);
+								req.setAttribute(Constants.VIEW_NAME, viewName); //Reference型参照先リンク表示用
+								req.setAttribute(Constants.ROOT_DEF_NAME, defName); //Reference型参照先リンク表示用
+								req.setAttribute(Constants.VIEW_TYPE, Constants.VIEW_TYPE_DETAIL);
 							}
 						};
 						Func afterFunc = new Func() {
@@ -373,11 +441,14 @@ public final class GetMassReferencesCommand extends DetailCommandBase {
 								req.removeAttribute(Constants.EDITOR_PROP_VALUE);
 								req.removeAttribute(Constants.ENTITY_DEFINITION);
 								req.removeAttribute(Constants.EDITOR_PROPERTY_DEFINITION);
+								req.removeAttribute(Constants.VIEW_NAME);
+								req.removeAttribute(Constants.ROOT_DEF_NAME);
+								req.removeAttribute(Constants.VIEW_TYPE);
 							}
 						};
 
 						//HTML取得
-						property.getEditor().setPropertyName(property.getPropertyName());
+						property.getEditor().setPropertyName(propName + "." + property.getPropertyName());
 						String html = ResponseUtil.getIncludeJspContents(path, beforeFunc, afterFunc) .replace("\r\n", "").replace("\n", "").replace("\r", "");
 
 						WebRequestStack stack = WebRequestStack.getCurrent();
@@ -401,13 +472,14 @@ public final class GetMassReferencesCommand extends DetailCommandBase {
 	 * 表示対象のプロパティか
 	 * @param pd
 	 * @param property
+	 * @param outputType
 	 * @return
 	 */
-	private boolean isDispProperty(PropertyDefinition pd, NestProperty property, String outputType) {
+	private boolean isDispProperty(PropertyDefinition pd, NestProperty property, OutputType outputType) {
 		if (property.getEditor() == null) return false;
-		if (OutputType.EDIT.name().equals(outputType)) {
+		if (OutputType.EDIT == outputType) {
 			if (property.isHideDetail()) return false;
-		} else if (OutputType.VIEW.name().equals(outputType)) {
+		} else if (OutputType.VIEW == outputType) {
 			if (property.isHideView()) return false;
 		}
 		return true;
@@ -418,11 +490,13 @@ public final class GetMassReferencesCommand extends DetailCommandBase {
 	 * @param view 画面定義
 	 * @return プロパティの一覧
 	 */
-	private List<MassReferenceSection> getMassReferenceSection(EntityDefinition entityDefinition, DetailFormView view, String viewName) {
+	private List<MassReferenceSection> getMassReferenceSection(
+			EntityDefinition ed, OutputType outputType, DetailFormView view, String viewName) {
 		List<MassReferenceSection> sections = new ArrayList<MassReferenceSection>();
 		for (Section section : view.getSections()) {
-			if (section instanceof DefaultSection && section.isDispFlag()) {
-				sections.addAll(getMassReferenceSection((DefaultSection) section));
+			if (section instanceof DefaultSection
+					&& EntityViewUtil.isDisplayElement(ed.getName(), section.getElementRuntimeId(), outputType)) {
+				sections.addAll(getMassReferenceSection(ed, outputType, (DefaultSection) section));
 			} else if (section instanceof MassReferenceSection) {
 				sections.add((MassReferenceSection) section);
 			}
@@ -435,26 +509,31 @@ public final class GetMassReferencesCommand extends DetailCommandBase {
 	 * @param section セクション
 	 * @return プロパティの一覧
 	 */
-	private List<MassReferenceSection> getMassReferenceSection(DefaultSection section) {
+	private List<MassReferenceSection> getMassReferenceSection(
+			EntityDefinition ed, OutputType outputType, DefaultSection section) {
 		List<MassReferenceSection> sections = new ArrayList<MassReferenceSection>();
 		for (Element elem : section.getElements()) {
 			if (elem instanceof MassReferenceSection) {
 				MassReferenceSection _section = (MassReferenceSection) elem;
-				if (_section.isDispFlag()) sections.add(_section);
+				if (EntityViewUtil.isDisplayElement(ed.getName(), _section.getElementRuntimeId(), outputType)) {
+					sections.add(_section);
+				}
 			} else if (elem instanceof DefaultSection) {
-				sections.addAll(getMassReferenceSection((DefaultSection) elem));
+				sections.addAll(getMassReferenceSection(ed, outputType, (DefaultSection) elem));
 			}
 		}
 		return sections;
 	}
 
-	private void addReferenceProperty(List<String> select, List<DisplayInfo> dispInfo, ReferenceProperty rp, NestProperty np, String parent, String outputType) {
+	private void addReferenceProperty(List<String> select, List<DisplayInfo> dispInfo, ReferenceProperty rp, NestProperty np, String parent, OutputType outputType) {
 		boolean hasNest = false;
 		List<NestProperty> nest = null;
+		String dispLabelItem = null;
 		if (np.getEditor() instanceof ReferencePropertyEditor) {
 			ReferencePropertyEditor rpe = (ReferencePropertyEditor) np.getEditor();
 			nest = rpe.getNestProperties();
 			hasNest = !nest.isEmpty();
+			dispLabelItem = rpe.getDisplayLabelItem();
 		}
 
 		String name = null;
@@ -474,14 +553,21 @@ public final class GetMassReferencesCommand extends DetailCommandBase {
 			select.add(name + "." + Entity.VERSION);
 		}
 
+		// 表示ラベルとして扱うプロパティ
+		if (dispLabelItem != null) {
+			if (!select.contains(name + "." + dispLabelItem)) {
+				select.add(name + "." + dispLabelItem);
+			}
+		}
+
 		if (hasNest) {
 			EntityDefinition red = getReferenceEntityDefinition(rp);
 
 			for (NestProperty _np : nest) {
 				//表示設定確認
-				if (OutputType.EDIT.name().equals(outputType)) {
+				if (OutputType.EDIT == outputType) {
 					if (_np.isHideDetail()) continue;
-				} else if (OutputType.VIEW.name().equals(outputType)) {
+				} else if (OutputType.VIEW == outputType) {
 					if (_np.isHideView()) continue;
 				}
 
@@ -586,7 +672,7 @@ public final class GetMassReferencesCommand extends DetailCommandBase {
 	 * 参照データの表示情報
 	 * @author lis3wg
 	 */
-	public class DisplayInfo {
+	public static class DisplayInfo {
 		private String name;
 		private String displayName;
 		private int width;

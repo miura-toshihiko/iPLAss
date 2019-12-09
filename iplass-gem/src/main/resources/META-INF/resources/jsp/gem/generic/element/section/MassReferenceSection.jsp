@@ -48,6 +48,7 @@
 	Object value = request.getAttribute(Constants.ENTITY_DATA);
 	OutputType type = (OutputType) request.getAttribute(Constants.OUTPUT_TYPE);
 	EntityDefinition ed = (EntityDefinition) request.getAttribute(Constants.ENTITY_DEFINITION);
+
 	DetailFormViewData data = (DetailFormViewData) TemplateUtil.getRequestContext().getAttribute(Constants.DATA);
 
 	MassReferenceSection section = (MassReferenceSection) element;
@@ -158,13 +159,13 @@
 	}
 %>
 <div class="massReference" data-oid="<c:out value="<%=entity.getOid() %>"/>" data-defName="${m:esc(defName)}"
- data-propName="<c:out value="<%=propName%>"/>" data-viewName="${m:esc(viewName)}" data-offset="0" data-limit="<%=limit%>" data-orgOutputType="<c:out value="<%=type%>"/>"
+ data-propName="<c:out value="<%=propName%>"/>" data-viewName="${m:esc(param.viewName)}" data-offset="0" data-limit="<%=limit%>" data-orgOutputType="<c:out value="<%=type%>"/>"
  data-outputType="<c:out value="<%=_type%>"/>" data-webapiName="<%=GetMassReferencesCommand.WEBAPI_NAME%>" data-removeWebapiName="<%=UpdateMappedbyReferenceCommand.WEBAPI_NAME%>"
  data-viewAction="<c:out value="<%=viewAction%>"/>" data-detailAction="<c:out value="<%=detailAction%>"/>"
  data-targetDefName="<c:out value="<%=rp.getObjectDefinitionName()%>"/>" data-mappedBy="<c:out value="<%=rp.getMappedBy()%>"/>" data-changeEditLinkToViewLink="<%=section.isChangeEditLinkToViewLink() %>"
  data-sortKey="" data-sortType="" data-creatable="<%=creatable %>" data-updatable="<%=updatable %>" data-deletable=<%=deletable%> data-purge=<%=purge %>
  data-showPaging=<%=!section.isHidePaging()%> data-showPageJump=<%=!section.isHidePageJump()%> data-showPageLink=<%=!section.isHidePageLink()%> data-showCount=<%=!section.isHideCount()%>
- data-condKey="<c:out value="<%=key %>" />" data-tokenValue=<%= TemplateUtil.outputToken(TokenOutputType.VALUE)%>>
+ data-showSearchBtn=<%=section.isShowSearchBtn()%> data-condKey="<c:out value="<%=key %>" />" data-tokenValue=<%= TemplateUtil.outputToken(TokenOutputType.VALUE)%>>
 <%
 	if (!PagingPosition.BOTTOM.name().equals(pagingPosition)) {
 %>

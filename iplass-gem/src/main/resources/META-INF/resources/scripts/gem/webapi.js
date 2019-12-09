@@ -158,15 +158,9 @@ function alertErrMessage(XMLHttpRequest) {
 
 	if (typeof res !== "undeined" && res != null
 			&& res.exceptionType == "org.iplass.mtp.auth.NoPermissionException") {
-		alert(scriptContext.locale.permissionErrOccurred);
-	} else 	if (typeof res !== "undeined" && res != null
-			&& res.exceptionType == "org.iplass.mtp.tenant.available.UnavailableWebApiException") {
-		if (!scriptContext.suppressAlert) {
-			alert(scriptContext.locale.maintenanceErrOccurred);
-			scriptContext.suppressAlert = true;
-		}
+		alert(scriptContext.gem.locale.error.permissionErrOccurred);
 	} else {
-		alert(scriptContext.locale.errOccurred);
+		alert(scriptContext.gem.locale.error.errOccurred);
 	}
 }
 
@@ -224,7 +218,8 @@ function search(webapi, searchType, formName, isCount, successFunc, errorFunc) {
 			if (response.status == "SUCCESS") {
 				var count = response.count;
 				var htmlData = response.htmlData;
-				$(":hidden[name='searchCond']").val(data);
+				// フォームパラメータのQueryStringをdecodeする
+				$(":hidden[name='searchCond']").val(decodeQueryString(data));
 				if (successFunc && $.isFunction(successFunc)) {
 					successFunc.call(this, htmlData, count);
 				}
@@ -232,7 +227,7 @@ function search(webapi, searchType, formName, isCount, successFunc, errorFunc) {
 				if (response.message != null && response.message != "") {
 					alert(response.message);
 				} else {
-					alert(scriptContext.locale.errOccurred);
+					alert(scriptContext.gem.locale.error.errOccurred);
 				}
 
 				if (errorFunc && $.isFunction(errorFunc)) {
@@ -285,7 +280,7 @@ function searchValidate(webapi, searchType, formName, successFunc, errorFunc) {
 				if (response.message != null && response.message != "") {
 					alert(response.message);
 				} else {
-					alert(scriptContext.locale.errOccurred);
+					alert(scriptContext.gem.locale.error.errOccurred);
 				}
 
 				if (errorFunc && $.isFunction(errorFunc)) {
@@ -444,7 +439,7 @@ function deleteAll(webapi, searchType, formName, _t, func) {
 	});
 }
 
-function getMassReference(webapi, oid, defName, propName, viewName, offset, sortKey, sortType, isCount, condKey, outputType, func) {
+function getMassReferenceData(webapi, oid, defName, propName, viewName, offset, sortKey, sortType, isCount, condKey, outputType, func) {
 	var params = "{";
 	params += "\"oid\":\"" + oid + "\"";
 	params += ",\"defName\":\"" + defName + "\"";
@@ -519,7 +514,7 @@ function purge(webapi, rbid, _t, func, errFunc) {
 	postAsync(webapi, params, function(results) {
 		if (func && $.isFunction(func)) func.call(this);
 	}, null, function(result) {
-		alert(scriptContext.locale.errOccurred);
+		alert(scriptContext.gem.locale.error.errOccurred);
 		if  (errFunc && $.isFunction(errFunc)) {
 			errFunc.call(this, XMLHttpRequest);
 		}
@@ -549,14 +544,14 @@ function restore(webapi, rbid, _t, func, errFunc) {
 		var errorRbid = results.errorRbid;
 		if (func && $.isFunction(func)) func.call(this, message, errorRbid);
 	}, null, function(result) {
-		alert(scriptContext.locale.errOccurred);
+		alert(scriptContext.gem.locale.error.errOccurred);
 		if  (errFunc && $.isFunction(errFunc)) {
 			errFunc.call(this, XMLHttpRequest);
 		}
 	});
 }
 
-function getAutocompletionValue(webapi, defName, viewName, viewType, propName, key, refSectionIndex, pValue, func) {
+function getAutocompletionValue(webapi, defName, viewName, viewType, propName, key, refSectionIndex, pValue, cValue, func) {
 	var params = "{";
 	params += "\"defName\":\"" + defName + "\"";
 	params += ",\"viewName\":\"" + viewName + "\"";
@@ -583,10 +578,37 @@ function getAutocompletionValue(webapi, defName, viewName, viewType, propName, k
 		params += "]";
 	}
 	params += "}";
+	params += ",\"currentValue\":[";
+	for (var i = 0; i < cValue.length; i++) {
+		if (i != 0) {
+			params += ",";
+		}
+		params += "\"" + cValue[i] + "\"";
+	}
+	params += "]";
 	params += "}";
 
 	postAsync(webapi, params, function(result) {
 		if (func && $.isFunction(func)) func.call(this, result.value);
+	});
+}
+
+function getUniqueItem(webapi, defName, viewName, viewType, propName, uniqueValue, func) {
+	var params = "{";
+	params += "\"defName\":\"" + defName + "\"";
+	params += ",\"viewName\":\"" + viewName + "\"";
+	params += ",\"viewType\":\"" + viewType + "\"";
+	params += ",\"propName\":\"" + propName + "\"";
+	if (uniqueValue == null) {
+		params += ",\"uniqueValue\":null";
+	} else {
+		params += ",\"uniqueValue\":\"" + uniqueValue + "\"";
+	}
+	params += "}";
+
+	postAsync(webapi, params, function(result) {
+		var entity = result.data;
+		if (func && $.isFunction(func)) func.call(this, entity);
 	});
 }
 
@@ -768,7 +790,7 @@ function getEntityName(defName, viewName, oid, version, async, func) {
 }
 
 //汎用画面ReferenceEditor用Entity名前一括取得
-function getEntityNameList(defName, viewName, list, func) {
+function getEntityNameList(defName, viewName, parentDefName, parentViewName, parentPropName, viewType, refSectionIndex, list, func) {
 	var _viewName = "";
 	if (typeof viewName !== "undefined") {
 		if (viewName === null) {
@@ -778,9 +800,54 @@ function getEntityNameList(defName, viewName, list, func) {
 		}
 
 	}
+	var _parentDefName = "";
+	if (typeof parentDefName !== "undefined") {
+		if (parentDefName === null) {
+			_parentDefName = ",\"parentDefName\":null";
+		} else {
+			_parentDefName = ",\"parentDefName\":\"" + parentDefName +"\"";
+		}
+	}
+	var _parentViewName = "";
+	if (typeof parentViewName !== "undefined") {
+		if (parentViewName === null) {
+			_parentViewName = ",\"parentViewName\":null";
+		} else {
+			_parentViewName = ",\"parentViewName\":\"" + parentViewName +"\"";
+		}
+	}
+	var _parentPropName = "";
+	if (typeof parentPropName !== "undefined") {
+		if (parentPropName === null) {
+			_parentPropName = ",\"parentPropName\":null";
+		} else {
+			_parentPropName = ",\"parentPropName\":\"" + parentPropName +"\"";
+		}
+	}
+	var _viewType = "";
+	if (typeof viewType !== "undefined") {
+		if (viewType === null) {
+			_viewType = ",\"viewType\":null";
+		} else {
+			_viewType = ",\"viewType\":\"" + viewType +"\"";
+		}
+	}
+	var _refSectionIndex = "";
+	if (typeof refSectionIndex !== "undefined") {
+		if (refSectionIndex === null) {
+			_refSectionIndex = ",\"referenceSectionIndex\":null";
+		} else {
+			_refSectionIndex = ",\"referenceSectionIndex\":\"" + refSectionIndex +"\"";
+		}
+	}
 	var params = "{";
 	params += "\"defName\":\"" + defName + "\"";
 	params += _viewName;
+	params += _parentDefName;
+	params += _parentViewName;
+	params += _parentPropName;
+	params += _viewType;
+	params += _refSectionIndex;
 	params += ",\"list\":" + JSON.stringify(list);
 	params += "}";
 

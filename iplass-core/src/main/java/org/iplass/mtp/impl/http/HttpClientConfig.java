@@ -24,7 +24,6 @@ import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.http.HttpHost;
-import org.apache.http.client.HttpClient;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
@@ -41,8 +40,17 @@ public class HttpClientConfig implements ServiceInitListener<Service> {
 	private Integer poolingMaxTotal;
 	private Integer poolingDefaultMaxPerRoute;
 	private Integer poolingTimeToLive;
+	private HttpClientBuilderFactory httpClientBuilderFactory;
 	
 	private CloseableHttpClient instance;
+
+	public HttpClientBuilderFactory getHttpClientBuilderFactory() {
+		return httpClientBuilderFactory;
+	}
+
+	public void setHttpClientBuilderFactory(HttpClientBuilderFactory httpClientBuilderFactory) {
+		this.httpClientBuilderFactory = httpClientBuilderFactory;
+	}
 
 	public Integer getPoolingTimeToLive() {
 		return poolingTimeToLive;
@@ -100,46 +108,41 @@ public class HttpClientConfig implements ServiceInitListener<Service> {
 		this.proxyPort = proxyPort;
 	}
 
-	public HttpClient getInstance() {
+	public CloseableHttpClient getInstance() {
 		return instance;
 	}
 
 	@Override
 	public void inited(Service service, Config config) {
-//		BasicHttpParams clientParams = new BasicHttpParams();
-//		clientParams.setParameter(CoreConnectionPNames.CONNECTION_TIMEOUT, connectionTimeout);
-//		clientParams.setParameter(CoreConnectionPNames.SO_TIMEOUT, soTimeout);
-//
-//		if (proxyHost != null) {
-//			HttpHost proxy = new HttpHost(proxyHost, proxyPort);
-//			clientParams.setParameter(ConnRoutePNames.DEFAULT_PROXY, proxy);
-//		}
-//		instance = new DefaultHttpClient(new PoolingClientConnectionManager(), clientParams);
-
-		RequestConfig.Builder builder = RequestConfig.custom()
-				.setConnectTimeout(connectionTimeout)
-				.setSocketTimeout(soTimeout);
-		if (proxyHost != null) {
-			builder.setProxy(new HttpHost(proxyHost, proxyPort));
-		}
-		HttpClientBuilder hcBuilder = HttpClientBuilder.create().setDefaultRequestConfig(builder.build());
-		if (poolingMaxTotal != null) {
-			hcBuilder.setMaxConnTotal(poolingMaxTotal);
-		}
-		if (poolingDefaultMaxPerRoute != null) {
-			hcBuilder.setMaxConnPerRoute(poolingDefaultMaxPerRoute);
-		}
-		if (poolingTimeToLive != null) {
-			hcBuilder.setConnectionTimeToLive(poolingTimeToLive.longValue(), TimeUnit.MILLISECONDS);
-		}
 		
-		instance = hcBuilder.build();
+		if (httpClientBuilderFactory != null) {
+			instance = httpClientBuilderFactory.create(service, config, this).build();
+			
+		} else {
+			RequestConfig.Builder builder = RequestConfig.custom()
+					.setConnectTimeout(connectionTimeout)
+					.setSocketTimeout(soTimeout);
+			if (proxyHost != null) {
+				builder.setProxy(new HttpHost(proxyHost, proxyPort));
+			}
+			HttpClientBuilder hcBuilder = HttpClientBuilder.create().setDefaultRequestConfig(builder.build());
+			if (poolingMaxTotal != null) {
+				hcBuilder.setMaxConnTotal(poolingMaxTotal);
+			}
+			if (poolingDefaultMaxPerRoute != null) {
+				hcBuilder.setMaxConnPerRoute(poolingDefaultMaxPerRoute);
+			}
+			if (poolingTimeToLive != null) {
+				hcBuilder.setConnectionTimeToLive(poolingTimeToLive.longValue(), TimeUnit.MILLISECONDS);
+			}
+			
+			instance = hcBuilder.build();
+		}
 
 	}
 
 	@Override
 	public void destroyed() {
-//		instance.getConnectionManager().shutdown();
 		try {
 			instance.close();
 		} catch (IOException e) {

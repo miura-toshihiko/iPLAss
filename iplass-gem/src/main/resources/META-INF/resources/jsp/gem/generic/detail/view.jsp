@@ -125,6 +125,9 @@
 	request.setAttribute(Constants.DEF_NAME, defName);
 	request.setAttribute(Constants.ROOT_DEF_NAME, defName);	//NestTableの場合にDEF_NAMEが置き換わるので別名でRootのDefNameをセット
 
+	//editor以下で参照するパラメータ
+	request.setAttribute(Constants.VIEW_NAME, viewName);
+
 	//section以下で参照するパラメータ
 	request.setAttribute(Constants.OUTPUT_TYPE, type);
 	request.setAttribute(Constants.ENTITY_DATA, data.getEntity());
@@ -147,6 +150,11 @@
 <div class="generic_detail detail_view v_<c:out value="<%=className %>"/>">
 <%@include file="../../layout/resource/mediaelementResource.jsp" %>
 <script type="text/javascript">
+function onclick_submit() {
+	var $form = $("#detailForm");
+	$form.append("<input type='hidden' name='fromView' value='true' />");
+	$form.submit();
+}
 function onclick_copy() {
 	var copyTarget = $(":hidden[name='_copyTarget']").val();
 	if (copyTarget == "Both") {
@@ -232,8 +240,8 @@ function dataUnlock() {
 ${m:outputToken('FORM_XHTML', true)}
 <input type="hidden" name="defName" value="<c:out value="<%=defName%>"/>" />
 <input type="hidden" name="searchCond" value="<c:out value="<%=searchCond%>"/>" />
-<input type="hidden" name="_copyTarget" value="<c:out value="<%=copyTarget.name()%>"/>" />
-<input type="hidden" name="copyTarget" value="<c:out value="<%=copyTarget.name()%>"/>" />
+<input type="hidden" name="_copyTarget" value="<c:out value="<%=copyTarget.value()%>"/>" />
+<input type="hidden" name="copyTarget" value="<c:out value="<%=copyTarget.value()%>"/>" />
 <input type="hidden" name="backPath" value="<c:out value="<%=backPath%>"/>" />
 <input type="hidden" name="topViewListOffset" value="<c:out value="<%=topViewListOffset%>"/>" />
 <%
@@ -268,7 +276,7 @@ ${m:outputToken('FORM_XHTML', true)}
 <jsp:include page="sectionNavi.inc.jsp" />
 <%
 	for (Section section : form.getSections()) {
-		if (!section.isDispFlag()) continue;
+		if (!EntityViewUtil.isDisplayElement(defName, section.getElementRuntimeId(), OutputType.VIEW)) continue;
 		request.setAttribute(Constants.ELEMENT, section);
 
 		String path = EntityViewUtil.getJspPath(section, ViewConst.DESIGN_TYPE_GEM);

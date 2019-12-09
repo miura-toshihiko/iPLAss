@@ -27,14 +27,17 @@ import java.io.InputStreamReader;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
+import java.util.ResourceBundle;
+
+import javax.sql.DataSource;
 
 import org.iplass.mtp.SystemException;
 import org.iplass.mtp.impl.core.ExecuteContext;
-import org.iplass.mtp.impl.core.config.ServiceRegistryInitializer;
+import org.iplass.mtp.impl.core.config.BootstrapProps;
 import org.iplass.mtp.impl.rdb.adapter.RdbAdapter;
 import org.iplass.mtp.impl.rdb.adapter.RdbAdapterService;
 import org.iplass.mtp.impl.rdb.connection.ConnectionFactory;
+import org.iplass.mtp.impl.rdb.connection.DataSourceConnectionFactory;
 import org.iplass.mtp.impl.rdb.connection.DriverManagerConnectionFactory;
 import org.iplass.mtp.impl.tools.tenant.TenantInfo;
 import org.iplass.mtp.impl.tools.tenant.TenantToolService;
@@ -68,6 +71,13 @@ public abstract class MtpCuiBase {
 	/** 言語(locale名) */
 	private String language;
 
+	/** リソースバンドル */
+	private ResourceBundle resourceBundle;
+
+	public MtpCuiBase() {
+		setupLanguage();
+	}
+
 	public List<String> getLogMessage() {
 		return logMessage;
 	}
@@ -90,10 +100,6 @@ public abstract class MtpCuiBase {
 		return language;
 	}
 
-	public void setLanguage(String language) {
-		this.language = language;
-	}
-
 	protected void setSuccess(boolean isSuccess) {
 		this.isSuccess = isSuccess;
 	}
@@ -102,6 +108,9 @@ public abstract class MtpCuiBase {
 		logMessage.clear();
 	}
 
+	protected void logDebug(String message) {
+		fireDebubLogMessage(message);
+	}
 	protected void logInfo(String message) {
 		fireInfoLogMessage(message);
 		logMessage.add(message);
@@ -136,23 +145,24 @@ public abstract class MtpCuiBase {
 
 		try {
 			//Config FileName
-			String configFileName = ServiceRegistryInitializer.getConfigFileName();
+			String configFileName = BootstrapProps.getInstance().getProperty(BootstrapProps.CONFIG_FILE_NAME, BootstrapProps.DEFAULT_CONFIG_FILE_NAME);
 
 			//Rdb Adapter
 			RdbAdapterService adapterService = ServiceRegistry.getRegistry().getService(RdbAdapterService.class);
 			RdbAdapter adapter = adapterService.getRdbAdapter();
 
 			//Connection Factory
-			String conenctUrl = null;
+			String conenctInfo = null;
 			ConnectionFactory factory = ServiceRegistry.getRegistry().getService(ConnectionFactory.class);
 			if (factory instanceof DriverManagerConnectionFactory) {
 				DriverManagerConnectionFactory dmFactory = (DriverManagerConnectionFactory) factory;
-				conenctUrl = getDriverUrl(dmFactory);
-			} else {
-				throw new SystemException("unsupport ConnectionFactory class : " + factory.getClass().getName());
+				conenctInfo = getDriverUrl(dmFactory);
+			} else if (factory instanceof DataSourceConnectionFactory) {
+				DataSourceConnectionFactory dsFactory = (DataSourceConnectionFactory) factory;
+				conenctInfo = getDataSourceClass(dsFactory);
 			}
 
-			configSetting = new ConfigSetting(configFileName, adapter, conenctUrl);
+			configSetting = new ConfigSetting(configFileName, adapter, conenctInfo);
 
 		} catch (Throwable e) {
 			throw new SystemException("failed to get config setting", e);
@@ -168,6 +178,13 @@ public abstract class MtpCuiBase {
 		return (String)urlField.get(dmFactory);
 	}
 
+	private String getDataSourceClass(DataSourceConnectionFactory dsFactory) throws Exception {
+		//private フィールドなのでリフレクションでセット
+		Field dataSourceField = dsFactory.getClass().getDeclaredField("dataSource");
+		dataSourceField.setAccessible(true);
+		return ((DataSource)dataSourceField.get(dsFactory)).getClass().getName();
+	}
+
 	/**
 	 * 環境情報を出力します。
 	 */
@@ -178,7 +195,7 @@ public abstract class MtpCuiBase {
 		logInfo("■Environment");
 		logInfo("\tconfig file :" + configSetting.getConfigFileName());
 		logInfo("\trdb adapter type :" + configSetting.getRdbAdapterName());
-		logInfo("\tconnect url :" + configSetting.getConenctUrl());
+		logInfo("\tconnect info :" + configSetting.getConnectionInfo());
 		logInfo("\tlanguage :" + getLanguage());
 		logInfo("-----------------------------------------------------------");
 		logInfo("");
@@ -255,6 +272,11 @@ public abstract class MtpCuiBase {
 		loggingLogListner = new LogListner() {
 
 			@Override
+			public void debug(String message) {
+				logger.debug(message);
+			}
+
+			@Override
 			public void warn(String message) {
 				logger.warn(message);
 			}
@@ -283,6 +305,7 @@ public abstract class MtpCuiBase {
 			public void error(String message, Throwable e) {
 				logger.error(message, e);
 			}
+
 		};
 
 		return loggingLogListner;
@@ -370,6 +393,11 @@ public abstract class MtpCuiBase {
 		}
 	}
 
+	private void fireDebubLogMessage(String message) {
+		for (LogListner listner : logListners) {
+			listner.debug(message);
+		}
+	}
 	private void fireInfoLogMessage(String message) {
 		for (LogListner listner : logListners) {
 			listner.info(message);
@@ -403,13 +431,34 @@ public abstract class MtpCuiBase {
 		}
 	}
 
+	private void setupLanguage() {
+
+		language = ToolsBatchResourceBundleUtil.getLanguage();
+		resourceBundle = ToolsBatchResourceBundleUtil.getResourceBundle(language);
+
+		ExecuteContext context = ExecuteContext.getCurrentContext();
+		context.setLanguage(language);
+	}
+
+	/**
+	 * メッセージを返します。
+	 *
+	 * @param key メッセージKEY
+	 * @param args 引数
+	 * @return メッセージ
+	 */
+	protected String rs(String key, Object... args) {
+		return ToolsBatchResourceBundleUtil.resourceString(resourceBundle, key, args);
+	}
+
 	public interface LogListner {
-		public void info(String message);
-		public void info(String message, Throwable e);
-		public void warn(String message);
-		public void warn(String message, Throwable e);
-		public void error(String message);
-		public void error(String message, Throwable e);
+		default void debug(String message) {};
+		void info(String message);
+		void info(String message, Throwable e);
+		void warn(String message);
+		void warn(String message, Throwable e);
+		void error(String message);
+		void error(String message, Throwable e);
 	}
 
 	private class ConsoleLogListner implements LogListner {
@@ -464,25 +513,7 @@ public abstract class MtpCuiBase {
 		public void error(String message, Throwable e) {
 			error(message);
 		}
-	}
 
-	protected void setupLanguage() {
-		if (getLanguage() == null) {
-			//Systemのデフォルトを取得
-			setLanguage(Locale.getDefault().getLanguage());
-		}
-
-		//enまたはja以外の場合はenにする
-		if (!"ja".equals(getLanguage()) && !"en".equals(getLanguage())) {
-			setLanguage("en");
-		}
-
-		ExecuteContext eContext = ExecuteContext.getCurrentContext();
-		eContext.setLanguage(getLanguage());
-	}
-
-	protected String getCommonResourceMessage(String subKey, Object... args) {
-		return ToolsBatchResourceBundleUtil.commonResourceString(getLanguage(), subKey, args);
 	}
 
 }

@@ -48,6 +48,7 @@ import org.iplass.mtp.entity.definition.properties.selectvalue.SelectValueDefini
 import com.google.gwt.core.client.GWT;
 import com.google.gwt.user.client.rpc.AsyncCallback;
 import com.smartgwt.client.types.Alignment;
+import com.smartgwt.client.types.Overflow;
 import com.smartgwt.client.util.BooleanCallback;
 import com.smartgwt.client.util.SC;
 import com.smartgwt.client.widgets.IButton;
@@ -85,7 +86,7 @@ public class SelectValueEditPane extends MetaDataMainEditPane {
 	/** ヘッダ部分 */
 	private MetaCommonHeaderPane headerPane;
 	/** 共通属性部分 */
-	private MetaCommonAttributeSection commonSection;
+	private MetaCommonAttributeSection<SelectValueDefinition> commonSection;
 
 	/** 個別属性部分 */
 	private SelectValueAttributePane selectValueAttributePane;
@@ -124,7 +125,7 @@ public class SelectValueEditPane extends MetaDataMainEditPane {
 		});
 
 		//共通属性
-		commonSection = new MetaCommonAttributeSection(targetNode, SelectValueDefinition.class);
+		commonSection = new MetaCommonAttributeSection<>(targetNode, SelectValueDefinition.class);
 
 		//個別属性
 		selectValueAttributePane = new SelectValueAttributePane();
@@ -201,12 +202,7 @@ public class SelectValueEditPane extends MetaDataMainEditPane {
 		this.curVersion = entry.getDefinitionInfo().getVersion();
 		this.curDefinitionId = entry.getDefinitionInfo().getObjDefId();
 
-		//共通属性
-		commonSection.setName(curDefinition.getName());
-		commonSection.setDisplayName(curDefinition.getDisplayName());
-		commonSection.setDescription(curDefinition.getDescription());
-
-		//SelectValue属性
+		commonSection.setDefinition(curDefinition);
 		selectValueAttributePane.setDefinition(curDefinition);
 	}
 
@@ -227,10 +223,7 @@ public class SelectValueEditPane extends MetaDataMainEditPane {
 			public void execute(Boolean value) {
 				if (value) {
 					final SelectValueDefinition definition = curDefinition;
-					definition.setName(commonSection.getName());
-					definition.setDisplayName(commonSection.getDisplayName());
-					definition.setDescription(commonSection.getDescription());
-
+					commonSection.getEditDefinition(definition);
 					selectValueAttributePane.getEditDefinition(definition);
 
 					updateDefinition(definition, true);
@@ -313,14 +306,25 @@ public class SelectValueEditPane extends MetaDataMainEditPane {
 
 		public SelectValueAttributePane() {
 			setWidth100();
+			setMargin(5);
 
 			selectGrid = new ListGrid();
-			selectGrid.setMargin(5);
-			selectGrid.setHeight(110);
+			selectGrid.setHeight(1);
 			selectGrid.setWidth100();
 			selectGrid.setShowAllColumns(true);
 			selectGrid.setShowAllRecords(true);
 			selectGrid.setCanResizeFields(true);
+
+			selectGrid.setOverflow(Overflow.VISIBLE);
+			selectGrid.setBodyOverflow(Overflow.VISIBLE);
+
+			selectGrid.setLeaveScrollbarGap(false);	//falseで縦スクロールバー領域が自動表示制御される
+
+			selectGrid.setCanResizeFields(true);	//列幅変更可
+			selectGrid.setCanSort(false);			//ソート不可
+			selectGrid.setCanGroupBy(false);		//Group化不可
+			selectGrid.setCanPickFields(false);	//列の選択不可
+			selectGrid.setCanAutoFitFields(false);	//列幅の自動調整不可(崩れるので)
 
 			//grid内でのD&Dでの並べ替えを許可
 			selectGrid.setCanDragRecordsOut(true);
@@ -328,6 +332,7 @@ public class SelectValueEditPane extends MetaDataMainEditPane {
 			selectGrid.setCanReorderRecords(true);
 
 			ListGridField valueField = new ListGridField("value", "Value");
+			valueField.setWidth(150);
 			ListGridField dispNameField = new ListGridField("dispName", "DisplayName");
 			selectGrid.setFields(valueField, dispNameField);
 

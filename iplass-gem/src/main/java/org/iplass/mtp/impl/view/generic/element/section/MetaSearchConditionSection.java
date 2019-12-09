@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.iplass.mtp.entity.csv.MultipleFormat;
 import org.iplass.mtp.impl.entity.EntityContext;
 import org.iplass.mtp.impl.entity.EntityHandler;
 import org.iplass.mtp.impl.script.template.GroovyTemplate;
@@ -106,6 +107,9 @@ public class MetaSearchConditionSection extends MetaSection {
 
 	/** CSVダウンロードファイル名Format(GroovyTemplate) */
 	private String csvdownloadFileNameFormat;
+
+	/** 多重度プロパティのCSV出力フォーマット */
+	private MultipleFormat csvMultipleFormat = MultipleFormat.EACH_COLUMN;
 
 	/** デフォルト検索条件 */
 	private String defaultCondition;
@@ -338,6 +342,22 @@ public class MetaSearchConditionSection extends MetaSection {
 	}
 
 	/**
+	 * 多重度プロパティのCSV出力フォーマットを取得します。
+	 * @return 多重度プロパティのCSV出力フォーマット
+	 */
+	public MultipleFormat getCsvMultipleFormat() {
+		return csvMultipleFormat;
+	}
+
+	/**
+	 * 多重度プロパティのCSV出力フォーマットを設定します。
+	 * @param csvMultipleFormat 多重度プロパティのCSV出力フォーマット
+	 */
+	public void setCsvMultipleFormat(MultipleFormat csvMultipleFormat) {
+		this.csvMultipleFormat = csvMultipleFormat;
+	}
+
+	/**
 	 * デフォルト検索条件を取得します。
 	 * @return デフォルト検索条件
 	 */
@@ -390,7 +410,7 @@ public class MetaSearchConditionSection extends MetaSection {
 	 * @return フィルタ設定
 	 */
 	public List<MetaFilterSetting> getFilterSetting() {
-		if (filterSetting == null) filterSetting = new ArrayList<MetaFilterSetting>();
+		if (filterSetting == null) filterSetting = new ArrayList<>();
 	    return filterSetting;
 	}
 
@@ -411,7 +431,7 @@ public class MetaSearchConditionSection extends MetaSection {
 	 * @return 要素
 	 */
 	public List<MetaElement> getElements() {
-		if (elements == null) elements = new ArrayList<MetaElement>();
+		if (elements == null) elements = new ArrayList<>();
 	    return elements;
 	}
 
@@ -494,6 +514,7 @@ public class MetaSearchConditionSection extends MetaSection {
 		this.csvdownloadMaxCount = section.getCsvdownloadMaxCount();
 		this.csvdownloadProperties = section.getCsvdownloadProperties();
 		this.csvdownloadFileNameFormat = section.getCsvdownloadFileNameFormat();
+		this.csvMultipleFormat = section.getCsvMultipleFormat();
 
 		if (!section.getSortSetting().isEmpty()) {
 			for (SortSetting setting : section.getSortSetting()) {
@@ -536,7 +557,10 @@ public class MetaSearchConditionSection extends MetaSection {
 		if (this.getElements().size() > 0) {
 			for (MetaElement elem : this.getElements()) {
 				Element e = elem.currentConfig(definitionId);
-				section.addElement(e);
+				//プロパティが無効な場合など、生成できない場合は追加しない
+				if (e != null) {
+					section.addElement(e);
+				}
 			}
 		}
 		section.setNonOutputOid(this.nonOutputOid);
@@ -549,10 +573,15 @@ public class MetaSearchConditionSection extends MetaSection {
 		section.setCsvdownloadMaxCount(this.csvdownloadMaxCount);
 		section.setCsvdownloadProperties(this.csvdownloadProperties);
 		section.setCsvdownloadFileNameFormat(this.csvdownloadFileNameFormat);
+		section.setCsvMultipleFormat(this.csvMultipleFormat);
 
 		if (!getSortSetting().isEmpty()) {
 			for (MetaSortSetting meta : getSortSetting()) {
-				section.addSortSetting(meta.currentConfig(ctx, handler));
+				SortSetting s = meta.currentConfig(ctx, handler);
+				//プロパティが無効な場合など、生成できない場合は追加しない
+				if (s != null) {
+					section.addSortSetting(s);
+				}
 			}
 		}
 

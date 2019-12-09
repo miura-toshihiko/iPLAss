@@ -1,19 +1,19 @@
 /*
  * Copyright (C) 2013 INFORMATION SERVICES INTERNATIONAL - DENTSU, LTD. All Rights Reserved.
- * 
+ *
  * Unless you have purchased a commercial license,
  * the following license terms apply:
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
  * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
@@ -23,7 +23,7 @@ package org.iplass.adminconsole.client.metadata.ui.entity.layout;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.iplass.adminconsole.client.metadata.ui.entity.layout.item.ViewEditWindow;
+import org.iplass.adminconsole.client.metadata.ui.entity.layout.item.ItemControl;
 
 import com.smartgwt.client.widgets.Canvas;
 import com.smartgwt.client.widgets.events.DropHandler;
@@ -72,6 +72,14 @@ public abstract class MultiColumnDropLayout extends HLayout {
 	}
 
 	@Override
+	public void setDropTypes(String types) {
+		super.setDropTypes(types);
+		for (ColumnLayout col : cols) {
+			col.setDropTypes(types);
+		}
+	}
+
+	@Override
 	public void setDropTypes(String... types) {
 		super.setDropTypes(types);
 		for (ColumnLayout col : cols) {
@@ -108,7 +116,7 @@ public abstract class MultiColumnDropLayout extends HLayout {
 	 * @param row
 	 * @return
 	 */
-	public ViewEditWindow getMember(int col, int row) {
+	public ItemControl getMember(int col, int row) {
 		//getMemberでループしてcol番目のカラムのrow行目のメンバを返す
 		int current = 0;
 		for (int i = 0; i < getMembers().length; i++) {
@@ -116,7 +124,7 @@ public abstract class MultiColumnDropLayout extends HLayout {
 				if (current == col) {
 					ColumnLayout column = (ColumnLayout) getMember(i);
 					if (column.getMembers().length > row) {
-						return (ViewEditWindow) column.getMember(row);
+						return (ItemControl) column.getMember(row);
 					}
 				}
 				current++;
@@ -131,8 +139,8 @@ public abstract class MultiColumnDropLayout extends HLayout {
 	public void clear() {
 		for (ColumnLayout col : cols) {
 			for (Canvas canvas : col.getMembers()) {
-				if (canvas instanceof ViewEditWindow) {
-					((ViewEditWindow) canvas).destroy();
+				if (canvas instanceof ItemControl) {
+					((ItemControl) canvas).destroy();
 				}
 			}
 		}

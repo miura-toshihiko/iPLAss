@@ -47,6 +47,7 @@ import java.util.Set;
 
 import org.apache.commons.beanutils.ConvertUtils;
 import org.iplass.mtp.spi.Config;
+import org.iplass.mtp.spi.ObjectBuilder;
 import org.iplass.mtp.spi.Service;
 import org.iplass.mtp.spi.ServiceConfigrationException;
 import org.iplass.mtp.spi.ServiceInitListener;
@@ -85,6 +86,12 @@ public class ConfigImpl implements Config {
 		Object instance;
 		boolean inited;
 		
+		Map<String, Instance> beanMap;
+		
+		Instance(Map<String, Instance> beanMap) {
+			this.beanMap = beanMap;
+		}
+		
 		void add(NameValue nv) {
 			if (nvl == null) {
 				nvl = new LinkedList<>();
@@ -96,6 +103,39 @@ public class ConfigImpl implements Config {
 			if (nv.isNull()) {
 				return null;
 			}
+			
+			if (nv.getRef() != null) {
+				Instance bi = beanMap.get(nv.getRef());
+				if (bi == null) {
+					logger.warn("No bean defined on property:" + nv.getName() + "'s ref:" + nv.getRef());
+					return null;
+				}
+				bi.init(null);
+				return bi.instance;
+			}
+			
+			ObjectBuilder<?> builder = nv.builder();
+			if (builder != null) {
+				builder.setName(nv.getName());
+				if (nv.value() != null) {
+					builder.setValue(nv.value());
+				}
+				if (nv.getClassName() != null) {
+					builder.setClassName(nv.getClassName());
+				}
+				if (nv.getArg() != null) {
+					@SuppressWarnings("unchecked")
+					HashMap<String, Object> argMap = (HashMap<String, Object>) toBean(HashMap.class, nv.getArg(), null);
+					builder.setArgs(argMap);
+				}
+				if (nv.getProperty() != null) {
+					@SuppressWarnings("unchecked")
+					HashMap<String, Object> propMap = (HashMap<String, Object>) toBean(HashMap.class, nv.getProperty(), null);
+					builder.setProperties(propMap);
+				}
+				return builder.build();
+			}
+			
 			if (nv.getClassName() == null) {
 				if (type == null) {
 					return nv.value();
@@ -208,7 +248,7 @@ public class ConfigImpl implements Config {
 			try {
 				Object bean = newIns(type, args);
 				if (props != null) {
-					LinkedHashMap<String, Instance> nvMap = toNameValueMap(props);
+					LinkedHashMap<String, Instance> nvMap = toNameValueMap(props, beanMap);
 					for (Map.Entry<String, Instance> e: nvMap.entrySet()) {
 						setProperty(bean, e.getKey(), e.getValue());
 					}
@@ -275,7 +315,7 @@ public class ConfigImpl implements Config {
 					value = null;
 				} else if (p.getType().isArray()) {
 					value = ins.toArray(type);
-				} else if (p.getType() == List.class) {
+				} else if (p.getType() == List.class || p.getType() == Collection.class) {
 					value = ins.toList(type);
 				} else {
 					value = ins.instance;
@@ -292,7 +332,7 @@ public class ConfigImpl implements Config {
 			if (args == null) {
 				return type.newInstance();
 			} else {
-				LinkedHashMap<String, Instance> argMap = toNameValueMap(args);
+				LinkedHashMap<String, Instance> argMap = toNameValueMap(args, beanMap);
 				ArrayList<Constructor<?>> targets = new ArrayList<>();
 				for (Constructor<?> c: type.getConstructors()) {
 					if (argMap.size() == c.getParameterCount()) {
@@ -375,8 +415,8 @@ public class ConfigImpl implements Config {
 						} else {
 							logger.warn("writeMethod not defined, so can't set array value to " + propName + " on " + bean.getClass().getName());
 						}
-					} else if (pd.getPropertyType() == List.class) {
-						List list = (List) pd.getReadMethod().invoke(bean);
+					} else if (pd.getPropertyType() == List.class || pd.getPropertyType() == Collection.class) {
+						Collection list = (Collection) pd.getReadMethod().invoke(bean);
 						if (list == null) {
 							list = val.toList(type);
 							if (pd.getWriteMethod() != null) {
@@ -403,13 +443,15 @@ public class ConfigImpl implements Config {
 	}
 
 	private String serviceName;
+	private LinkedHashMap<String, Instance> beanMap;
 	private LinkedHashMap<String, Instance> propMap;
 	private Map<String, Service> dependentServices;
 	private List<String> dependentServiceNames;
 
-	public ConfigImpl(String serviceName, NameValue[] nameValues) {
+	public ConfigImpl(String serviceName, NameValue[] nameValues, NameValue[] beanNameValues) {
 		this.serviceName = serviceName;
-		propMap = toNameValueMap(nameValues);
+		beanMap = toNameValueMap(beanNameValues, null);
+		propMap = toNameValueMap(nameValues, beanMap);
 	}
 	
 	public String getServiceName() {
@@ -445,13 +487,16 @@ public class ConfigImpl implements Config {
 		return (T) dependentServices.get(serviceName);
 	}
 	
-	private static LinkedHashMap<String, Instance> toNameValueMap(NameValue[] nameValues) {
+	private static LinkedHashMap<String, Instance> toNameValueMap(NameValue[] nameValues, Map<String, Instance> sharedMap) {
 		LinkedHashMap<String, Instance> nvm = new LinkedHashMap<>();
+		if (sharedMap == null) {
+			sharedMap = nvm;
+		}
 		if (nameValues != null) {
 			for (NameValue nv: nameValues) {
 				Instance val = nvm.get(nv.getName());
 				if (val == null) {
-					val = new Instance();
+					val = new Instance(sharedMap);
 					nvm.put(nv.getName(), val);
 				}
 				val.add(nv);
@@ -576,8 +621,18 @@ public class ConfigImpl implements Config {
 			return (String) value;
 		}
 		if (value instanceof List) {
-			return ((List<String>) value).get(0);
+			value = ((List<Object>) value).get(0);
+			if (value instanceof String) {
+				return (String) value;
+			}
 		}
+		
+		//from NameValue
+		Instance i = propMap.get(name);
+		if (i != null && i.nvl != null && i.nvl.size() > 0) {
+			return i.nvl.get(0).value();
+		}
+		
 		return null;
 	}
 
@@ -590,13 +645,38 @@ public class ConfigImpl implements Config {
 			return res;
 		}
 		if (value instanceof List) {
-			return (List<String>) value;
+			//check instance type
+			boolean isStr = true;
+			for (Object o: (List<Object>) value) {
+				if (o != null && !(o instanceof String)) {
+					isStr = false;
+					break;
+				}
+			}
+			if (isStr) {
+				return (List<String>) value;
+			}
 		}
+		
+		//from NameValue
+		Instance i = propMap.get(name);
+		if (i != null && i.nvl != null && i.nvl.size() > 0) {
+			ArrayList<String> ret = new ArrayList<>(i.nvl.size());
+			for (NameValue nv: i.nvl) {
+				ret.add(nv.value());
+			}
+			return ret;
+		}
+		
 		return null;
 	}
 	
 	@SuppressWarnings("unchecked")
 	public <T> T getValue(String name, Class<T> type) {
+		if (type == Object.class) {
+			type = null;
+		}
+		
 		Object value = valueInit(name, type);
 		if (value instanceof List) {
 			return ((List<T>) value).get(0);
@@ -607,6 +687,10 @@ public class ConfigImpl implements Config {
 	
 	@SuppressWarnings("unchecked")
 	public <T> List<T> getValues(String name, Class<T> type) {
+		if (type == Object.class) {
+			type = null;
+		}
+		
 		Object value = valueInit(name, type);
 		if (value == null) {
 			return null;
@@ -646,17 +730,31 @@ public class ConfigImpl implements Config {
 		return getValues(name, null);
 	}
 	
-	@SuppressWarnings("unchecked")
 	public void notifyInited(Service service) {
+		for (Instance i: beanMap.values()) {
+			inited(service, i);
+		}
+		
 		for (Instance i: propMap.values()) {
-			i.init(null);
-			if (i.instance instanceof ServiceInitListener) {
-				((ServiceInitListener<Service>) i.instance).inited(service, this);
-			} else if (i.instance instanceof List<?>) {
-				for (Object lp: (List<?>) i.instance) {
-					if (lp instanceof ServiceInitListener) {
-						((ServiceInitListener<Service>) lp).inited(service, this);
-					}
+			inited(service, i);
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	private void inited(Service service, Instance i) {
+		i.init(null);
+		if (i.instance instanceof ServiceInitListener) {
+			((ServiceInitListener<Service>) i.instance).inited(service, this);
+		} else if (i.instance instanceof List<?>) {
+			for (Object lp: (List<?>) i.instance) {
+				if (lp instanceof ServiceInitListener) {
+					((ServiceInitListener<Service>) lp).inited(service, this);
+				}
+			}
+		} else if (i.instance instanceof Map<?,?>) {
+			for (Object mp: ((Map<?,?>) i.instance).values()) {
+				if (mp instanceof ServiceInitListener) {
+					((ServiceInitListener<Service>) mp).inited(service, this);
 				}
 			}
 		}
@@ -664,13 +762,26 @@ public class ConfigImpl implements Config {
 	
 	public void notifyDestroyed() {
 		for (Instance i: propMap.values()) {
-			if (i.instance instanceof ServiceInitListener) {
-				((ServiceInitListener<?>) i.instance).destroyed();
-			} else if (i.instance instanceof List<?>) {
-				for (Object lp: (List<?>) i.instance) {
-					if (lp instanceof ServiceInitListener) {
-						((ServiceInitListener<?>) lp).destroyed();
-					}
+			destroyed(i);
+		}
+		for (Instance i: beanMap.values()) {
+			destroyed(i);
+		}
+	}
+
+	private void destroyed(Instance i) {
+		if (i.instance instanceof ServiceInitListener) {
+			((ServiceInitListener<?>) i.instance).destroyed();
+		} else if (i.instance instanceof List<?>) {
+			for (Object lp: (List<?>) i.instance) {
+				if (lp instanceof ServiceInitListener) {
+					((ServiceInitListener<?>) lp).destroyed();
+				}
+			}
+		} else if (i.instance instanceof Map<?,?>) {
+			for (Object mp: ((Map<?,?>) i.instance).values()) {
+				if (mp instanceof ServiceInitListener) {
+					((ServiceInitListener<?>) mp).destroyed();
 				}
 			}
 		}

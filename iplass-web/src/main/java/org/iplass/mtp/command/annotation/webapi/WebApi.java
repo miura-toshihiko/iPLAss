@@ -28,6 +28,7 @@ import java.lang.annotation.Target;
 
 import org.iplass.mtp.command.annotation.CommandConfig;
 import org.iplass.mtp.webapi.WebApiRequestConstants;
+import org.iplass.mtp.webapi.definition.CacheControlType;
 import org.iplass.mtp.webapi.definition.RequestType;
 import org.iplass.mtp.webapi.definition.MethodType;
 import org.iplass.mtp.webapi.definition.StateType;
@@ -48,6 +49,24 @@ public @interface WebApi {
 	String name();
 	String displayName() default "##default";
 	String description() default "##default";
+	
+	/**
+	 * WebAPIのキャッシュ種別（Cache-Controlヘッダの制御）を設定します。
+	 * デフォルトは、UNSPECIFIED（未指定）です。
+	 * 
+	 * @return WebAPIのキャッシュ種別
+	 */
+	CacheControlType cacheControlType() default CacheControlType.UNSPECIFIED;
+
+	/**
+	 * cacheControlType=CACHEを指定した場合の
+	 * WebAPIキャッシュのmax-age（秒）を指定します。
+	 * デフォルト値は-1でこの場合はmax-ageは未指定となります。<br>
+	 * <b>注意：max-age未指定の場合、FF、Chromeでは実際はキャッシュが利用されません</b>
+	 * 
+	 * @param cacheControlMaxAge
+	 */
+	long cacheControlMaxAge() default -1;
 
 	boolean checkXRequestedWithHeader() default true;
 	boolean privilaged() default false;
@@ -59,11 +78,43 @@ public @interface WebApi {
 	boolean accessControlAllowCredentials() default false;
 	boolean needTrustedAuthenticate() default false;
 
+	WebApiParamMapping[] paramMapping() default {};
+
 	CommandConfig command() default @CommandConfig;
 	RequestType[] accepts() default{};
 	MethodType[] methods() default{};
+	
+	/**
+	 * 許可するリクエストボディのContentType。デフォルト未指定（＝すべて許可）。<br>
+	 * accepts指定より、allowRequestContentTypesの指定による制限が優先されます。<br>
+	 * 例えば、
+	 * accepts指定によりJSON形式の処理が有効化されている場合において、
+	 * allowRequestContentTypesに"application/json"が含まれない場合は、
+	 * JSON形式によるリクエストは処理されません。
+	 * 
+	 */
+	String[] allowRequestContentTypes() default {};
+	
+	/**
+	 * リクエストボディの最大サイズ（バイト）。-1の場合は無制限を表す。
+	 * annotation上ではデフォルト値はLong.MIN_VALUEだが、これは未指定を表す。
+	 * 
+	 * @return
+	 */
+	long maxRequestBodySize() default Long.MIN_VALUE;
+
+	/**
+	 * multipart/form-dataの際のファイルの最大サイズ（バイト）。-1の場合は無制限を表す。
+	 * annotation上ではデフォルト値はLong.MIN_VALUEだが、これは未指定を表す。
+	 * １つのファイルに対する最大サイズなので、複数のファイルの合計サイズを制限したい場合は、
+	 * maxRequestBodySizeを設定します。
+	 * 
+	 * @return
+	 */
+	long maxFileSize() default Long.MIN_VALUE;
 	StateType state() default StateType.STATEFUL;
 	boolean supportBearerToken() default false;
+	String[] oauthScopes() default{};
 
 	String[] results() default {WebApiRequestConstants.DEFAULT_RESULT};
 

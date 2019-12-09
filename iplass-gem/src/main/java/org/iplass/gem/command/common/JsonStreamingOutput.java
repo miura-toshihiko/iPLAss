@@ -24,10 +24,12 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.util.TimeZone;
 
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.StreamingOutput;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -45,6 +47,8 @@ public class JsonStreamingOutput implements StreamingOutput {
 	@Override
 	public void write(OutputStream output) throws IOException, WebApplicationException {
 		ObjectMapper mapper = new ObjectMapper();
+		//for backward compatibility
+		mapper.configOverride(java.sql.Date.class).setFormat(JsonFormat.Value.forPattern("yyyy-MM-dd").withTimeZone(TimeZone.getDefault()));
 		BufferedWriter writer = null;
 		try {
 			writer = new BufferedWriter(new OutputStreamWriter(output, "UTF-8"));

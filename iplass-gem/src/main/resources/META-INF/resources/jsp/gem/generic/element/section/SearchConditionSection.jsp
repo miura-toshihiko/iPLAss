@@ -50,6 +50,7 @@
 <%@ page import="org.iplass.mtp.view.generic.element.section.SearchConditionSection"%>
 <%@ page import="org.iplass.mtp.view.generic.element.section.SearchConditionSection.CsvDownloadSpecifyCharacterCode"%>
 <%@ page import="org.iplass.mtp.view.generic.EntityViewUtil"%>
+<%@ page import="org.iplass.mtp.view.generic.OutputType"%>
 <%@ page import="org.iplass.mtp.view.generic.SearchFormView"%>
 <%@ page import="org.iplass.mtp.view.generic.ViewConst"%>
 <%@ page import="org.iplass.mtp.web.template.TemplateUtil"%>
@@ -221,7 +222,7 @@
 
 	//Commandで設定されるパラメータ
 	SearchFormViewData data = (SearchFormViewData) request.getAttribute(Constants.DATA);
-	String viewName = request.getParameter(Constants.VIEW_NAME);
+	String viewName = (String) request.getAttribute(Constants.VIEW_NAME);
 	if (viewName == null) viewName = "";
 	HashMap<String, Object> defaultSearchCond = (HashMap<String, Object>) request.getAttribute(Constants.DEFAULT_SEARCH_COND);
 
@@ -229,6 +230,7 @@
 	SearchConditionSection section = view.getCondSection();
 
 	EntityDefinition ed = data.getEntityDefinition();
+	String defName = ed.getName();
 	List<EntityFilterItem> filters = data.getFilters();
 
 	//選択タイプ(selectの場合のみ設定される。see common.js#searchReference)
@@ -389,7 +391,11 @@ function doSearch(searchType, offset, resetSort, target, src) {
 	if (resetSort) {
 		$(":hidden[name='sortKey']").val("");
 		$(":hidden[name='sortType']").val("");
-		$("#gview_searchResult tr.ui-jqgrid-labels th .ui-jqgrid-sortable").removeClass('asc desc');
+		var $sortable = $("#gview_searchResult tr.ui-jqgrid-labels th .ui-jqgrid-sortable");
+		//フラット以外のソートマーククリア
+		$sortable.removeClass('asc desc');
+		//フラットのソートマーククリア
+		$("span.s-ico", $sortable).hide();
 	}
 
 	$("div.result-block").show();
@@ -512,16 +518,19 @@ $(function() {
 		} else {
 %>
 	$("#<%=condKey%> :text").attr("name", "<%=condKey%>");
-	<%
+<%
 		}
 	}
 
 	//初期タブ選択処理
 	//searchCond != nullの場合(検索画面に戻ってきた場合)はSearchResultSectionでセットされる
-	String _searchType = "normal";
+	String _searchType = Constants.SEARCH_TYPE_NORMAL;
 	if (searchCond.isEmpty()) {
 		// xssは起こらないが、セレクタにタグが混ざるとjqueryでエラーになるため、特定文字のみ渡すようにする
-		if ("detail".equals(searchType) || "fixed".equals(searchType)) _searchType = searchType;
+		if (Constants.SEARCH_TYPE_DETAIL.equals(searchType) 
+				|| Constants.SEARCH_TYPE_FIXED.equals(searchType)) {
+			_searchType = searchType;
+		}
 %>
 	setSearchTab("<%=_searchType%>");
 <%
@@ -532,7 +541,10 @@ $(function() {
 		if (pi.isBlank()) continue;
 		String propName = pi.getPropertyName();
 		PropertyDefinition pd = defMap.get(propName);
-		if (!pi.isDispFlag() || !isDispProperty(pd) || pi.getValidator() == null) continue;
+		if (!EntityViewUtil.isDisplayElement(defName, pi.getElementRuntimeId(), OutputType.SEARCHCONDITION)
+				|| !isDispProperty(pd) || pi.getValidator() == null) {
+			continue;
+		}
 
 		// 種類が増えるようなら分離も検討
 		RequiresAtLeastOneFieldValidator validator = (RequiresAtLeastOneFieldValidator) pi.getValidator();
@@ -623,7 +635,8 @@ $(function() {
 				elementList.add(new BlankSpace());
 			} else {
 				PropertyDefinition pd = defMap.get(property.getPropertyName());
-				if (property.isDispFlag() && !property.isHideNormalCondition() && isDispProperty(pd)) {
+				if (EntityViewUtil.isDisplayElement(defName, property.getElementRuntimeId(), OutputType.SEARCHCONDITION)
+						&& !property.isHideNormalCondition() && isDispProperty(pd)) {
 					elementList.add(property);
 				} else {
 					elementList.add(new BlankSpace());
@@ -642,7 +655,8 @@ $(function() {
 		if (element instanceof PropertyItem) {
 			PropertyItem property = (PropertyItem) element;
 			PropertyDefinition pd = defMap.get(property.getPropertyName());
-			if (property.isDispFlag() && !property.isHideNormalCondition() && isDispProperty(pd)) {
+			if (EntityViewUtil.isDisplayElement(defName, property.getElementRuntimeId(), OutputType.SEARCHCONDITION)
+					&& !property.isHideNormalCondition() && isDispProperty(pd)) {
 				String style = property.getStyle() != null ? property.getStyle() : "";
 				String displayLabel = TemplateUtil.getMultilingualString(property.getDisplayLabel(), property.getLocalizedDisplayLabelList(), pd.getDisplayName(), pd.getLocalizedDisplayNameList());
 %>
@@ -716,7 +730,7 @@ $(function() {
 			}
 		} else if (element instanceof VirtualPropertyItem) {
 			VirtualPropertyItem property = (VirtualPropertyItem) element;
-			if (property.isDispFlag()) {
+			if (EntityViewUtil.isDisplayElement(defName, property.getElementRuntimeId(), OutputType.SEARCHCONDITION)) {
 				PropertyDefinition pd = EntityViewUtil.getPropertyDefinition(property);
 				String style = property.getStyle() != null ? property.getStyle() : "";
 				String displayLabel = TemplateUtil.getMultilingualString(property.getDisplayLabel(), property.getLocalizedDisplayLabelList());
@@ -911,7 +925,7 @@ $(function() {
 
 		<%-- common.js --%>
 		addDetailValidator(function() {
-			var msg = scriptContext.locale.requiredMsg;
+			var msg = scriptContext.gem.locale.common.requiredMsg;
 			for (var i = 0; i < propList.length; i++) {
 				var propName = es(propList[i]);
 				var displayLabel = $("option[value='" + propName + "']:first", $div).text();
@@ -958,7 +972,7 @@ $(function() {
 
 		for (int i = 0; i < dtlCndCount; i++) {
 			//検索画面に戻ってきた場合で、番号が飛んでいるものは除外
-			if ("detail".equals(searchCondSearchType) && !checkDtlCndData(searchCond, i)) continue;
+			if (Constants.SEARCH_TYPE_DETAIL.equals(searchCondSearchType) && !checkDtlCndData(searchCond, i)) continue;
 			String condPropName = Constants.DETAIL_COND_PROP_NM + i;
 			String rowId = "detailCond_" + i;
 %>
@@ -975,7 +989,8 @@ $(function() {
 //				PropertyDefinition pd = ed.getProperty(propName);
 				PropertyDefinition pd = defMap.get(propName);
 				String displayLabel = TemplateUtil.getMultilingualString(pi.getDisplayLabel(), pi.getLocalizedDisplayLabelList(), pd.getDisplayName(), pd.getLocalizedDisplayNameList());
-				if (!pi.isDispFlag() || pi.isHideDetailCondition() || !isDispProperty(pd)) continue;
+				if (!EntityViewUtil.isDisplayElement(defName, pi.getElementRuntimeId(), OutputType.SEARCHCONDITION)
+						|| pi.isHideDetailCondition() || !isDispProperty(pd)) continue;
 				if (pi.getEditor() instanceof ReferencePropertyEditor) {
 					ReferencePropertyEditor editor = (ReferencePropertyEditor) pi.getEditor();
 

@@ -58,27 +58,34 @@ import org.iplass.mtp.impl.metadata.RootMetaData;
 import org.iplass.mtp.impl.script.template.GroovyTemplate;
 import org.iplass.mtp.impl.script.template.GroovyTemplateBinding;
 import org.iplass.mtp.impl.view.generic.common.MetaAutocompletionSetting.AutocompletionSettingHandler;
+import org.iplass.mtp.impl.view.generic.element.ElementHandler;
 import org.iplass.mtp.impl.view.generic.element.MetaButton.ButtonHandler;
 import org.iplass.mtp.impl.web.WebUtil;
 import org.iplass.mtp.impl.web.template.MetaGroovyTemplate;
 import org.iplass.mtp.spi.ServiceRegistry;
 import org.iplass.mtp.util.DateUtil;
 import org.iplass.mtp.util.StringUtil;
+import org.iplass.mtp.view.generic.BulkFormView;
 import org.iplass.mtp.view.generic.DetailFormView;
 import org.iplass.mtp.view.generic.EntityView;
 import org.iplass.mtp.view.generic.EntityViewManager;
+import org.iplass.mtp.view.generic.EntityViewUtil;
 import org.iplass.mtp.view.generic.FormViewUtil;
 import org.iplass.mtp.view.generic.OutputType;
 import org.iplass.mtp.view.generic.SearchFormView;
 import org.iplass.mtp.view.generic.common.AutocompletionHandleException;
+import org.iplass.mtp.view.generic.editor.JoinPropertyEditor;
 import org.iplass.mtp.view.generic.editor.NestProperty;
 import org.iplass.mtp.view.generic.editor.PropertyEditor;
 import org.iplass.mtp.view.generic.editor.ReferencePropertyEditor;
 import org.iplass.mtp.view.generic.element.Element;
+import org.iplass.mtp.view.generic.element.property.PropertyColumn;
 import org.iplass.mtp.view.generic.element.property.PropertyItem;
 import org.iplass.mtp.view.generic.element.section.DefaultSection;
+import org.iplass.mtp.view.generic.element.section.MassReferenceSection;
 import org.iplass.mtp.view.generic.element.section.ReferenceSection;
 import org.iplass.mtp.view.generic.element.section.SearchConditionSection;
+import org.iplass.mtp.view.generic.element.section.SearchResultSection;
 import org.iplass.mtp.view.generic.element.section.Section;
 import org.iplass.mtp.web.template.TemplateUtil;
 import org.slf4j.Logger;
@@ -131,7 +138,7 @@ public class EntityViewManagerImpl extends AbstractTypedDefinitionManager<Entity
 			} else {
 				form = ev.getDetailFormView(viewName);
 			}
-			editor = getEditor(propName, form);
+			editor = getDetailFormViewEditor(defName, propName, form);
 		} else if ("search".equals(viewType)) {
 			SearchFormView form = null;
 			if (viewName == null || viewName.isEmpty()) {
@@ -139,13 +146,37 @@ public class EntityViewManagerImpl extends AbstractTypedDefinitionManager<Entity
 			} else {
 				form = ev.getSearchFormView(viewName);
 			}
-			editor = getEditor(propName, form);
+			editor = getSearchFormViewEditor(defName, propName, form);
+		} else if ("searchResult".equals(viewType)) {
+			SearchFormView form = null;
+			if (viewName == null || viewName.isEmpty()) {
+				form = ev.getDefaultSearchFormView();
+			} else {
+				form = ev.getSearchFormView(viewName);
+			}
+			editor = getSearchResultEditor(defName, propName, form);
+		} else if ("bulk".equals(viewType)) {
+			SearchFormView form = null;
+			if (viewName == null || viewName.isEmpty()) {
+				form = ev.getDefaultSearchFormView();
+			} else {
+				form = ev.getSearchFormView(viewName);
+			}
+			editor = getBulkUpdateEditor(defName, propName, form);
+		} else if ("multiBulk".equals(viewType)) {
+			BulkFormView form = null;
+			if (viewName == null || viewName.isEmpty()) {
+				form = ev.getDefaultBulkFormView();
+			} else {
+				form = ev.getBulkFormView(viewName);
+			}
+			editor = getBulkFormViewEditor(defName, propName, form);
 		}
 
 		return editor;
 	}
 
-	private PropertyEditor getEditor(String propName, DetailFormView form) {
+	private PropertyEditor getDetailFormViewEditor(String defName, String propName, DetailFormView form) {
 		String currentPropName = null;
 		String subPropName = null;
 		if (propName.indexOf(".") == -1) {
@@ -155,24 +186,83 @@ public class EntityViewManagerImpl extends AbstractTypedDefinitionManager<Entity
 			subPropName = propName.substring(propName.indexOf(".") + 1);
 		}
 
+		//FIXME outputtypeを判定
+		OutputType outputType =  OutputType.EDIT;
 		for (Section section : form.getSections()) {
+			if (!isDisplayElement(defName, section.getElementRuntimeId(), outputType, null)) {
+				continue;
+			}
 			if (section instanceof DefaultSection) {
-				DefaultSection df = (DefaultSection) section;
-				for (Element element : df.getElements()) {
-					if (element instanceof PropertyItem) {
-						PropertyItem property = (PropertyItem) element;
-						if (property.getPropertyName().equals(currentPropName)) {
-							//FIXME なぜセットが必要？
-//							if (property.getEditor() instanceof ReferencePropertyEditor) {
-//								property.getEditor().setPropertyName(property.getPropertyName());
-//							}
-							if (subPropName == null) {
-								property.getEditor().setPropertyName(property.getPropertyName());	//念のためセット
-								return property.getEditor();
-							} else {
-								return getEditor(subPropName, property.getEditor());
-							}
-						}
+				PropertyEditor editor = getEditor(defName, outputType, (DefaultSection)section, currentPropName, subPropName);
+				if (editor != null) {
+					return editor;
+				}
+			} else if (section instanceof MassReferenceSection) {
+				PropertyEditor editor = getEditor(defName, outputType, (MassReferenceSection) section, currentPropName, subPropName);
+				if (editor != null) {
+					return editor;
+				}
+			}
+		}
+		return null;
+	}
+
+	private PropertyEditor getEditor(String defName, OutputType outputType, DefaultSection section, final String currentPropName, final String subPropName) {
+		for (Element element : section.getElements()) {
+			if (!isDisplayElement(defName, element.getElementRuntimeId(), outputType, null)) {
+				continue;
+			}
+			if (element instanceof PropertyItem) {
+				PropertyItem property = (PropertyItem) element;
+				if (property.getPropertyName().equals(currentPropName)) {
+					//FIXME なぜセットが必要？
+//					if (property.getEditor() instanceof ReferencePropertyEditor) {
+//						property.getEditor().setPropertyName(property.getPropertyName());
+//					}
+					if (subPropName == null) {
+						property.getEditor().setPropertyName(property.getPropertyName());	//念のためセット
+						return property.getEditor();
+					} else {
+						return getEditor(subPropName, property.getEditor());
+					}
+				}
+				//JoinPropertyEditorからネスとされたPropertyEditorを探します。
+				if (property.getEditor() instanceof JoinPropertyEditor) {
+					PropertyEditor editor = getEditor(currentPropName, property.getEditor());
+					if (editor == null) continue;
+					if (subPropName == null) {
+						return editor;
+					} else {
+						return getEditor(subPropName, editor);
+					}
+				}
+			} else if (element instanceof DefaultSection) {
+				PropertyEditor nest = getEditor(defName, outputType, (DefaultSection)element, currentPropName, subPropName);
+				if (nest != null) {
+					return nest;
+				}
+			}
+		}
+		return null;
+	}
+
+	private PropertyEditor getEditor(String defName, OutputType outputType, MassReferenceSection section, final String currentPropName, final String subPropName) {
+		if (subPropName == null) return null;
+
+		if (!isDisplayElement(defName, section.getElementRuntimeId(), outputType, null)) {
+			return null;
+		}
+
+		if (section.getPropertyName().equals(currentPropName)) {
+			for (NestProperty np : section.getProperties()) {
+				if (subPropName.indexOf(".") > -1) {
+					PropertyEditor editor = getEditor(subPropName, np.getEditor());
+					if (editor != null) {
+						return editor;
+					}
+				} else {
+					if (np.getPropertyName().equals(subPropName)) {
+						return np.getEditor();
 					}
 				}
 			}
@@ -180,12 +270,29 @@ public class EntityViewManagerImpl extends AbstractTypedDefinitionManager<Entity
 		return null;
 	}
 
-	private PropertyEditor getEditor(String propName, SearchFormView form) {
+	private PropertyEditor getSearchFormViewEditor(String defName, String propName, SearchFormView form) {
 		String currentPropName = null;
 		String subPropName = null;
+
 		if (propName.indexOf(".") == -1) {
 			currentPropName = propName;
 		} else {
+			// 子階層Entityのプロパティ
+			SearchConditionSection section = form.getCondSection();
+			for (Element element : section.getElements()) {
+				if (!(element instanceof PropertyItem)) continue;
+
+				if (!isDisplayElement(defName, element.getElementRuntimeId(), OutputType.SEARCHCONDITION, null)) {
+					continue;
+				}
+
+				PropertyItem property = (PropertyItem) element;
+				if (!property.isBlank() && property.getPropertyName().equals(propName)) {
+					return property.getEditor();
+				}
+			}
+
+			//ネストテーブルのネストプロパティ
 			currentPropName = propName.substring(0, propName.indexOf("."));
 			subPropName = propName.substring(propName.indexOf(".") + 1);
 		}
@@ -193,6 +300,11 @@ public class EntityViewManagerImpl extends AbstractTypedDefinitionManager<Entity
 		SearchConditionSection section = form.getCondSection();
 		for (Element element : section.getElements()) {
 			if (!(element instanceof PropertyItem)) continue;
+
+			if (!isDisplayElement(defName, element.getElementRuntimeId(), OutputType.SEARCHCONDITION, null)) {
+				continue;
+			}
+
 			PropertyItem property = (PropertyItem) element;
 			if (!property.isBlank() && property.getPropertyName().equals(currentPropName)) {
 				//FIXME なぜセットが必要？
@@ -211,13 +323,19 @@ public class EntityViewManagerImpl extends AbstractTypedDefinitionManager<Entity
 	}
 
 	private PropertyEditor getEditor(String propName, PropertyEditor editor) {
+		List<NestProperty> nestProperties = null;
 		// nest構造のPropertyEditorを取得する
-		if (!(editor instanceof ReferencePropertyEditor)) {
+		if (editor instanceof ReferencePropertyEditor) {
+			ReferencePropertyEditor refEditor = (ReferencePropertyEditor) editor;
+			nestProperties = refEditor.getNestProperties();
+		} else if (editor instanceof JoinPropertyEditor) {
+			JoinPropertyEditor joinEditor = (JoinPropertyEditor) editor;
+			nestProperties = joinEditor.getProperties();
+		} else {
 			return null;
 		}
 
-		ReferencePropertyEditor refEditor = (ReferencePropertyEditor) editor;
-		if (refEditor.getNestProperties() == null || refEditor.getNestProperties().isEmpty()) {
+		if (nestProperties == null || nestProperties.isEmpty()) {
 			return null;
 		}
 
@@ -230,8 +348,61 @@ public class EntityViewManagerImpl extends AbstractTypedDefinitionManager<Entity
 			subPropName = propName.substring(propName.indexOf(".") + 1);
 		}
 
-		for (NestProperty property : refEditor.getNestProperties()) {
+		for (NestProperty property : nestProperties) {
 			if (property.getPropertyName().equals(currentPropName)) {
+				if (subPropName == null) {
+					property.getEditor().setPropertyName(property.getPropertyName());	//念のためセット
+					return property.getEditor();
+				} else {
+					return getEditor(subPropName, property.getEditor());
+				}
+			}
+			// JoinPropertyEditorからネスとされたPropertyEditorを探します。
+			if (property.getEditor() instanceof JoinPropertyEditor) {
+				PropertyEditor nestEditor = getEditor(currentPropName, property.getEditor());
+				if (nestEditor == null) continue;
+				if (subPropName == null) {
+					return nestEditor;
+				} else {
+					return getEditor(subPropName, nestEditor);
+				}
+			}
+		}
+		return null;
+	}
+
+	private PropertyEditor getSearchResultEditor(String defName, String propName, SearchFormView form) {
+		String currentPropName = null;
+		String subPropName = null;
+		if (propName.indexOf(".") == -1) {
+			currentPropName = propName;
+		} else {
+			// 子階層Entityのプロパティ
+			SearchResultSection section = form.getResultSection();
+			for (Element element : section.getElements()) {
+				if (!(element instanceof PropertyColumn)) continue;
+				PropertyColumn property = (PropertyColumn) element;
+				if (property.getPropertyName().equals(propName)
+						&& EntityViewUtil.isDisplayElement(defName, property.getElementRuntimeId(), OutputType.SEARCHRESULT)) {
+					return property.getEditor();
+				}
+			}
+
+			//ネストテーブルのネストプロパティ
+			currentPropName = propName.substring(0, propName.indexOf("."));
+			subPropName = propName.substring(propName.indexOf(".") + 1);
+		}
+
+		SearchResultSection section = form.getResultSection();
+		for (Element element : section.getElements()) {
+			if (!(element instanceof PropertyColumn)) continue;
+			PropertyColumn property = (PropertyColumn) element;
+			if (property.getPropertyName().equals(currentPropName)
+					&& EntityViewUtil.isDisplayElement(defName, property.getElementRuntimeId(), OutputType.SEARCHRESULT)) {
+				//FIXME なぜセットが必要？
+//				if (property.getEditor() instanceof ReferencePropertyEditor) {
+//					property.getEditor().setPropertyName(property.getPropertyName());
+//				}
 				if (subPropName == null) {
 					property.getEditor().setPropertyName(property.getPropertyName());	//念のためセット
 					return property.getEditor();
@@ -241,6 +412,84 @@ public class EntityViewManagerImpl extends AbstractTypedDefinitionManager<Entity
 			}
 		}
 		return null;
+	}
+
+	private PropertyEditor getBulkUpdateEditor(String defName, String propName, SearchFormView form) {
+		String currentPropName = null;
+		String subPropName = null;
+		if (propName.indexOf(".") == -1) {
+			currentPropName = propName;
+		} else {
+			currentPropName = propName.substring(0, propName.indexOf("."));
+			subPropName = propName.substring(propName.indexOf(".") + 1);
+		}
+
+		SearchResultSection section = form.getResultSection();
+		for (Element element : section.getElements()) {
+			if (!(element instanceof PropertyColumn)) continue;
+
+			if (!isDisplayElement(defName, element.getElementRuntimeId(), OutputType.BULK, null)) {
+				continue;
+			}
+
+			PropertyColumn property = (PropertyColumn) element;
+			if (property.getBulkUpdateEditor() == null) continue;
+			if (property.getPropertyName().equals(currentPropName)) {
+				if (subPropName == null) {
+					property.getBulkUpdateEditor().setPropertyName(property.getPropertyName());
+					return property.getBulkUpdateEditor();
+				} else {
+					return getEditor(subPropName, property.getBulkUpdateEditor());
+				}
+			}
+			//JoinPropertyEditorからネストされたPropertyEditorを探します。
+			if (property.getBulkUpdateEditor() instanceof JoinPropertyEditor) {
+				PropertyEditor editor = getEditor(currentPropName, property.getBulkUpdateEditor());
+				if (editor == null) continue;
+				if (subPropName == null) {
+					return editor;
+				} else {
+					return getEditor(subPropName, editor);
+				}
+			}
+		}
+		return null;
+	}
+
+	private PropertyEditor getBulkFormViewEditor(String defName, String propName, BulkFormView form) {
+		String currentPropName = null;
+		String subPropName = null;
+		if (propName.indexOf(".") == -1) {
+			currentPropName = propName;
+		} else {
+			currentPropName = propName.substring(0, propName.indexOf("."));
+			subPropName = propName.substring(propName.indexOf(".") + 1);
+		}
+
+		for (Section section : form.getSections()) {
+			if (!isDisplayElement(defName, section.getElementRuntimeId(), OutputType.BULK, null)) {
+				continue;
+			}
+			if (section instanceof DefaultSection) {
+				PropertyEditor editor = getEditor(defName, OutputType.BULK, (DefaultSection)section, currentPropName, subPropName);
+				if (editor != null) {
+					return editor;
+				}
+			}
+		}
+		return null;
+	}
+
+	@Override
+	public PropertyEditor getPropertyEditor(String defName, String viewType, String viewName, String propName, Integer refSectionIndex) {
+		PropertyEditor editor = null;
+		if (refSectionIndex == null) {
+			editor = getPropertyEditor(defName, viewType, viewName, propName);
+		} else {
+			editor = getPropertyEditor(defName, viewName, propName, refSectionIndex);
+		}
+
+		return editor;
 	}
 
 	@Override
@@ -417,6 +666,12 @@ public class EntityViewManagerImpl extends AbstractTypedDefinitionManager<Entity
 	}
 
 	@Override
+	public BulkFormView createDefaultBulkFormView(String definitionName) {
+		// AdminConsoleの標準ロード時は各種表示名を空で作成する為falseを指定
+		return FormViewUtil.createDefaultBulkFormView(edm.get(definitionName), false);
+	}
+
+	@Override
 	public String getCustomStyle(String definitionName, String scriptKey, String editorScriptKey, Entity entity, Object propValue) {
 		if (definitionName == null || scriptKey == null || editorScriptKey == null) {
 			//GroovyTemplateをキャッシュしているKEYが未指定の場合は取得しない
@@ -454,6 +709,28 @@ public class EntityViewManagerImpl extends AbstractTypedDefinitionManager<Entity
 		}
 
 		return style;
+	}
+
+	@Override
+	public boolean isDisplayElement(String definitionName, String elementRuntimeId,
+			OutputType outputType, Entity entity) {
+
+		//Defaultで生成された場合にelementRuntimeIdが未指定なのでtrueとする
+		if (definitionName == null || elementRuntimeId == null || outputType == null) {
+			return true;
+		}
+
+		EntityViewHandler viewHandler = service.getRuntimeByName(definitionName);
+		if (viewHandler == null) {
+			return false;
+		}
+
+		ElementHandler elementHandler = viewHandler.getElementHandler(elementRuntimeId);
+		if (elementHandler == null) {
+			return false;
+		}
+
+		return elementHandler.isDisplay(outputType, entity);
 	}
 
 	@Override
@@ -514,7 +791,7 @@ public class EntityViewManagerImpl extends AbstractTypedDefinitionManager<Entity
 	}
 
 	@Override
-	public Object getAutocompletionValue(String definitionName, String viewName, String viewType, String propName, String autocompletionKey, Integer referenceSectionIndex, Map<String, String[]> param) {
+	public Object getAutocompletionValue(String definitionName, String viewName, String viewType, String propName, String autocompletionKey, Integer referenceSectionIndex, Map<String, String[]> param, List<String> currentValue) {
 		EntityViewHandler view = service.getRuntimeByName(definitionName);
 		if (view == null) return null;
 
@@ -527,8 +804,12 @@ public class EntityViewManagerImpl extends AbstractTypedDefinitionManager<Entity
 		} else {
 			editor = getPropertyEditor(definitionName, viewType, viewName, propName);
 		}
+		//連動先の多重度が複数の場合、Listで格納
+		//連動先の多重度が単数の場合、値をそのまま格納
+		PropertyDefinition pd = EntityViewUtil.getPropertyDefinition(propName, edm.get(definitionName));
+		Object currValue = pd.getMultiplicity() == 1 ? (currentValue.size() > 0 ? currentValue.get(0) : "") : currentValue;
 		boolean isReference = editor instanceof ReferencePropertyEditor;
-		Object value = handler.handle(param, isReference);
+		Object value = handler.handle(param, currValue, isReference);
 
 		Object returnValue = null;
 		if (isReference) {
@@ -739,4 +1020,5 @@ public class EntityViewManagerImpl extends AbstractTypedDefinitionManager<Entity
 	private static String resourceString(String key, Object... arguments) {
 		return GemResourceBundleUtil.resourceString(key, arguments);
 	}
+
 }

@@ -32,6 +32,7 @@
 <%@ page import="org.iplass.mtp.entity.definition.EntityDefinition"%>
 <%@ page import="org.iplass.mtp.entity.definition.PropertyDefinition"%>
 <%@ page import="org.iplass.mtp.util.StringUtil"%>
+<%@ page import="org.iplass.mtp.view.generic.editor.JoinPropertyEditor"%>
 <%@ page import="org.iplass.mtp.view.generic.editor.NestProperty"%>
 <%@ page import="org.iplass.mtp.view.generic.editor.ReferencePropertyEditor"%>
 <%@ page import="org.iplass.mtp.view.generic.element.property.PropertyColumn"%>
@@ -48,14 +49,17 @@
 <%@ page import="org.iplass.gem.command.generic.delete.DeleteAllCommand"%>
 <%@ page import="org.iplass.gem.command.generic.delete.DeleteListCommand"%>
 <%@ page import="org.iplass.gem.command.generic.detail.DetailViewCommand"%>
+<%@ page import="org.iplass.gem.command.generic.bulk.BulkUpdateViewCommand"%>
+<%@ page import="org.iplass.gem.command.generic.bulk.MultiBulkUpdateViewCommand"%>
 <%@ page import="org.iplass.gem.command.generic.search.CountCommand"%>
 <%@ page import="org.iplass.gem.command.generic.search.SearchFormViewData"%>
 <%@ page import="org.iplass.gem.command.generic.search.SearchSelectListCommand"%>
 <%@ page import="org.iplass.gem.command.Constants"%>
+<%@ page import="org.iplass.gem.command.GemResourceBundleUtil"%>
 <%@ page import="org.iplass.gem.command.ViewUtil"%>
 <%!
-	boolean isDispProperty(PropertyDefinition pd, PropertyColumn property) {
-		if (!property.isDispFlag()) return false;
+	boolean isDispProperty(String defName, PropertyDefinition pd, PropertyColumn property) {
+		if (!EntityViewUtil.isDisplayElement(defName, property.getElementRuntimeId(), OutputType.SEARCHRESULT)) return false;
 		if (property.getEditor() == null) return false;
 		return true;
 	}
@@ -76,7 +80,9 @@
 	String searchCond = request.getParameter(Constants.SEARCH_COND);
 	if (searchCond == null) searchCond = "";
 
-	String viewName = request.getParameter(Constants.VIEW_NAME);
+	String viewName = (String) request.getAttribute(Constants.VIEW_NAME);
+	if (viewName == null) viewName = "";
+
 	HashMap<String, Object> defaultSearchCond = (HashMap<String, Object>) request.getAttribute(Constants.DEFAULT_SEARCH_COND);
 	String executeSearch = getDefaultValue(defaultSearchCond, searchCond, Constants.EXECUTE_SEARCH);
 
@@ -89,6 +95,7 @@
 	SearchFormView view = data.getView();
 	SearchResultSection section = view.getResultSection();
 	EntityDefinition ed = data.getEntityDefinition();
+	String defName = ed.getName();
 
 	EntityDefinitionManager edm = ManagerLocator.getInstance().getManager(EntityDefinitionManager.class);
 
@@ -136,8 +143,20 @@
 		deleteAllWebapi = DeleteAllCommand.WEBAPI_NAME;
 	}
 
+	//Limit件数
+	int limit = ViewUtil.getSearchLimit(section);
+
+	//一括詳細表示アクション
+	String bulkEditAction = BulkUpdateViewCommand.BULK_EDIT_ACTION_NAME + urlPath;
+	if (section.isUseBulkView()) {
+		bulkEditAction = MultiBulkUpdateViewCommand.BULK_EDIT_ACTION_NAME + urlPath;
+	}
+
 	Boolean showdDetermineButton = (Boolean) request.getAttribute(Constants.SHOW_DETERMINE_BUTTON);
 	if (showdDetermineButton == null) showdDetermineButton = false;
+
+	Boolean multiSelect = OutputType.SEARCHRESULT == type && !section.isHideDelete() && canDelete || OutputType.SEARCHRESULT == type && section.isShowBulkUpdate() && canUpdate || OutputType.MULTISELECT == type;
+	if (multiSelect == null) multiSelect = false;
 %>
 <div class="result-block" style="display:none;">
 <h3 class="hgroup-02">
@@ -155,7 +174,7 @@ ${m:rs("mtp-gem-messages", "generic.element.section.SearchResultSection.srchrslt
 	}
 %>
 <input type="hidden" name="offset" value="0" >
-<input type="hidden" name="limit" value="<c:out value="<%=section.getDispRowCount()%>"/>" >
+<input type="hidden" name="limit" value="<%=limit%>">
 <input type="hidden" name="noLimit" value="<%=section.isHidePaging()%>">
 <script type="text/javascript">
 var $pager = null;
@@ -170,7 +189,51 @@ $(function() {
 		};
 	});
 
-	var multiSelect = <%=(OutputType.SEARCHRESULT == type && !section.isHideDelete() && canDelete) || OutputType.MULTISELECT == type%>;
+	var cellAttrFunc = function (rowId, val, rowObject, colModel, rdata) {
+<%
+	if (section.isGroupingData()) {
+%>
+		var rowIndex = parseInt(rowId) - 1;
+		var data = grid.getGridParam("_data");
+		var row = data[rowIndex];
+		var colName = colModel.name;
+
+		if (rowIndex > 0) {
+			var beforeRow = data[rowIndex - 1];
+			//前の行と値が同じか確認
+			var dif = false;
+			if (row.orgOid != beforeRow.orgOid || row.orgVersion != beforeRow.orgVersion || row[colName] != beforeRow[colName]) {
+				dif = true;
+			}
+			if (!dif) return " style=\"display:none;\" ";//同じ場合は非表示にする
+		}
+
+		//この行から何行分rowspanを設定するか計算
+		var count = 0;
+		for (var i = rowIndex; i < data.length; i++) {
+			if (i >= data.length) break;
+			var nextRow = data[i];
+			var dif = false;
+			if (row.orgOid != nextRow.orgOid || row.orgVersion != nextRow.orgVersion || row[colName] != nextRow[colName]) {
+				dif = true;
+				break;
+			}
+			if (!dif) count++;
+			else break;
+		}
+		if (count > 1) return " style=\"vertical-align: center !important;\" rowspan=\"" + count + "\"";
+		else return null;
+<%
+	} else {
+%>
+		//definitionの設定がfalseなら結合しない
+		return null;
+<%
+	}
+%>
+	}
+
+	var multiSelect = <%=multiSelect%>;
 	var colModel = new Array();
 	colModel.push({name:"orgOid", index:"orgOid", sortable:false, hidden:true, frozen:true, label:"oid"});
 	colModel.push({name:"orgVersion", index:"orgVersion", sortable:false, hidden:true, frozen:true, label:"version"});
@@ -178,12 +241,12 @@ $(function() {
 	if (OutputType.SINGLESELECT == type) {
 		//スタイル調整のため、classes、labelClassesに"sel_radio"を指定
 %>
-	colModel.push({name:'selOid', index:'selOid', width:20, sortable:false, frozen:true, label:"", resizable:false, classes:"sel_radio", labelClasses:"sel_radio"});
+	colModel.push({name:'selOid', index:'selOid', width:20, sortable:false, frozen:true, label:"", resizable:false, classes:"sel_radio", labelClasses:"sel_radio", cellattr: cellAttrFunc});
 <%
 	} else if (OutputType.MULTISELECT == type) {
 	} else if (OutputType.SEARCHRESULT == type) {
 %>
-	colModel.push({name:'_mtpDetailLink', index:'_mtpDetailLink', width:${m:rs("mtp-gem-messages", "generic.element.section.SearchResultSection.detailLinkWidth")}, sortable:false, align:'center', frozen:true, label:"", classes:"detail-links"});
+	colModel.push({name:'_mtpDetailLink', index:'_mtpDetailLink', width:${m:rs("mtp-gem-messages", "generic.element.section.SearchResultSection.detailLinkWidth")}, sortable:false, align:'center', frozen:true, label:"", classes:"detail-links", cellattr: cellAttrFunc});
 <%
 	}
 
@@ -194,8 +257,29 @@ $(function() {
 			PropertyDefinition pd = EntityViewUtil.getPropertyDefinition(propName, ed);
 			String displayLabel = TemplateUtil.getMultilingualString(property.getDisplayLabel(), property.getLocalizedDisplayLabelList(), pd.getDisplayName(), pd.getLocalizedDisplayNameList());
 
-			if (isDispProperty(pd, property)) {
+			if (isDispProperty(defName, pd, property)) {
 				if (!(pd instanceof ReferenceProperty)) {
+					String sortPropName = StringUtil.escapeHtml(propName);
+					String width = "";
+					if (property.getWidth() > 0) {
+						width = ", width:" + property.getWidth();
+					}
+					String align = "";
+					if (property.getTextAlign() != null) {
+						align = ", align:'" + property.getTextAlign().name().toLowerCase() + "'";
+					}
+					String style = property.getStyle() != null ? property.getStyle() : "";
+					String sortable = "sortable:true";
+					if (!ViewUtil.getEntityViewHelper().isSortable(pd)) {
+						sortable = "sortable:false";
+					}
+%>
+<%-- XSS対応-メタの設定のため対応なし(displayLabel,style) --%>
+	colModel.push({name:"<%=sortPropName%>", index:"<%=sortPropName%>", classes:"<%=style%>", label:"<p class='title'><%=displayLabel%></p>", <%=sortable%><%=width%><%=align%>, cellattr: cellAttrFunc});
+
+<%
+				//参照プロパティでJoinPropertyEditorを利用する場合
+				} else if (property.getEditor() instanceof JoinPropertyEditor) {
 					String sortPropName = StringUtil.escapeHtml(propName);
 					String width = "";
 					if (property.getWidth() > 0) {
@@ -267,14 +351,24 @@ $(function() {
 			String style = property.getStyle() != null ? property.getStyle() : "";
 %>
 <%-- XSS対応-メタの設定のため対応なし(displayLabel,style) --%>
-colModel.push({name:"<%=propName%>", index:"<%=propName%>", classes:"<%=style%>", label:"<p class='title'><%=displayLabel%></p>", sortable:false, <%=width%><%=align%>});
+colModel.push({name:"<%=propName%>", index:"<%=propName%>", classes:"<%=style%>", label:"<p class='title'><%=displayLabel%></p>", sortable:false <%=width%><%=align%>});
 <%
 		}
 	}
 %>
 	grid = $("#searchResult").jqGrid({
 		datatype: "local",
+<%
+	if (section.getDispHeight() > 0) {
+%>
+		height: <%=section.getDispHeight()%>,
+<%
+	} else {
+%>
 		height: "auto",
+<%
+	}
+%>
 		colModel: colModel,
 		headertitles: true,
 		multiselect: multiSelect,
@@ -306,9 +400,40 @@ colModel.push({name:"<%=propName%>", index:"<%=propName%>", classes:"<%=style%>"
 		,onSelectRow: function(rowid, e) {
 			var row = grid.getRowData(rowid);
 			var value = row.orgOid + "_" + row.orgVersion;
-			$(":radio[name='selOid'][value='" + value + "']").prop("checked", true);
-			selectArray.shift();
-			selectArray.push(value);
+			var rowIndex = parseInt(rowid) - 1;
+
+			clearRowHighlight(rowIndex);
+<%
+		if (section.isGroupingData()) {
+			// 結合されたチェックボタンにチェックを入れます。
+%>
+			for (var i = rowIndex; i >= 0; i--) {
+				if ($("#gview_searchResult tr.jqgrow:eq(" + i + ")").find(":radio[name='selOid'][value='" + value + "']").is(":visible")) { 
+					rowIndex = i; break;
+				}
+			}
+<% 
+		}
+%>
+			var $selRow = $("#gview_searchResult tr.jqgrow:eq(" + rowIndex + ")");
+			$selRow.find(":radio[name='selOid'][value='" + value + "']").prop("checked", true);
+<%
+		if (section.isGroupingData()) {
+%>
+			var rowspan = $selRow.children("td.sel_radio").attr("rowspan");
+			if (rowspan && e) {
+				for (var i = rowIndex; i < rowIndex + parseInt(rowspan); i++) {
+					setRowHighlight(i);
+				}
+			}
+<%
+		} else {
+%>
+			setRowHighlight(rowIndex);
+<%
+		}
+%>
+			selectArray.splice(0, selectArray.length, value);
 		}
 <%
 	} else if (OutputType.MULTISELECT == type) {
@@ -318,8 +443,12 @@ colModel.push({name:"<%=propName%>", index:"<%=propName%>", classes:"<%=style%>"
 				var row = grid.getRowData(rowid);
 				var id = row.orgOid + "_" + row.orgVersion;
 				if (e) {
-					if (multiplicity == -1 || selectArray.length < multiplicity) {
+					<%-- 同じOIDとVersionのレコードを選択配列に追加しません。 --%>
+					if (selectArray.indexOf(id) == -1 && (multiplicity == -1 || selectArray.length < multiplicity)) {
 						selectArray.push(id);
+						<%-- 多重度が複数のデータの場合、行番号が違う同じOIDとVersionのレコードがあるので、チェックを付け直します。 --%>
+						grid.resetSelection();
+						applyGridSelection(false);
 					} else {
 						alert("${m:rs('mtp-gem-messages', 'generic.element.section.SearchResultSection.notSelect')}");
 						grid.setSelection(rowid);
@@ -331,9 +460,85 @@ colModel.push({name:"<%=propName%>", index:"<%=propName%>", classes:"<%=style%>"
 							break;
 						}
 					}
+					<%-- 多重度が複数のデータの場合、行番号が違う同じOIDとVersionのレコードがあるので、チェックを付け直します。 --%>
+					grid.resetSelection();
+					applyGridSelection(false);
 				}
 				keepSelectAllStatus = false;
 			}
+		}
+<%
+	} else if (OutputType.SEARCHRESULT == type) {
+%>
+		,onSelectRow: function(rowid, e) {
+			var row = grid.getRowData(rowid);
+			var id = row.orgOid + "_" + row.orgVersion;
+<%
+		if (!multiSelect) {
+%>
+			var rowIndex = parseInt(rowid) - 1;
+			clearRowHighlight(rowIndex);
+			if (e) {
+				$("#searchResult tr[id]").each(function() {
+					var _rowid = $(this).attr("id");
+					if (_rowid == rowid) return;
+					var _row = grid.getRowData(_rowid);
+					var _id = _row.orgOid + "_" + _row.orgVersion;
+					if (id == _id) $(this).addClass("ui-state-highlight");
+				});
+			}
+<%
+		} else {
+			// 多重度が複数のデータの場合、行番号が違う同じOIDとVersionのレコードがあるので、チェックを付け直します。 
+%>
+			$("#searchResult tr[id]").each(function() {
+				var _rowid = $(this).attr("id");
+				if (_rowid == rowid) return;
+				var _row = grid.getRowData(_rowid);
+				var _id = _row.orgOid + "_" + _row.orgVersion;
+				if (id == _id) grid.setSelection(_rowid, false);
+			});
+<%
+		}
+%>
+		}
+<%
+	}
+
+	if (section.isGroupingData()) {
+%>
+		,gridComplete: function() {
+			var data = $("#searchResult").getGridParam("_data");
+			if (!data) return;
+			//チェックボタン一覧の結合処理を行います。
+			$("#gview_searchResult tr.jqgrow").each(function(index){
+				var row = data[index];
+				if (index > 0) {
+					var beforeRow = data[index - 1];
+					//前の行と値が同じか確認
+					var dif = false;
+					if (row.orgOid != beforeRow.orgOid || row.orgVersion != beforeRow.orgVersion) {
+						dif = true;
+					}
+					if (!dif) {
+						$(this).children(".td_cbox").hide(); return;
+					}
+				}
+
+				//この行から何行分rowspanを設定するか計算
+				var count = 0;
+				for (var i = index; i < data.length; i++) {
+					var nextRow = data[i];
+					var dif = false;
+					if (row.orgOid != nextRow.orgOid || row.orgVersion != nextRow.orgVersion) {
+						dif = true;
+						break;
+					}
+					if (!dif) count++;
+					else break;
+				}
+				if (count > 1) $(this).children(".td_cbox").attr("rowspan", count);
+			})
 		}
 <%
 	}
@@ -346,7 +551,7 @@ colModel.push({name:"<%=propName%>", index:"<%=propName%>", classes:"<%=style%>"
 		boolean showPageLink = showItemCount ? !section.isHidePageLink() : false;
 		boolean showPageJump = showItemCount ? !section.isHidePageJump() : false;
 %>
-	var limit = <%=section.getDispRowCount()%>;
+	var limit = <%=limit%>;
 
 	$pager = $(".result-block .result-nav").pager({
 		limit: limit,
@@ -409,6 +614,7 @@ colModel.push({name:"<%=propName%>", index:"<%=propName%>", classes:"<%=style%>"
 function setData(list, count) {
 	$("div.result-data").show();
 	grid.clearGridData(true);
+	grid.setGridParam({"_data": list}).trigger("reloadGrid");
 	$(list).each(function(index) {
 		this["searchResultDataId"] = this.orgOid + "_" + this.orgVersion;
 <%	if (type == OutputType.SINGLESELECT) { %>
@@ -442,7 +648,23 @@ function setData(list, count) {
 	if (OutputType.SINGLESELECT == type) {
 %>
 	if (selectArray.length > 0) {
-		$(":radio[name='selOid'][value='" + selectArray[0] + "']").prop("checked", true).trigger("change");
+		var $radio = $(":radio[name='selOid'][value='" + selectArray[0] + "']:visible").prop("checked", true).trigger("change");
+		if ($radio.length > 0) {
+			var rowIndex = $("#gview_searchResult tr.jqgrow").index($radio.parents("tr.jqgrow"));
+			setRowHighlight(rowIndex);
+<%
+		if (section.isGroupingData()) {
+%>
+			var rowspan = $radio.parents("td.sel_radio").attr("rowspan");
+			if (rowspan) {
+				for (var i = rowIndex; i < rowIndex + parseInt(rowspan); i++) {
+					setRowHighlight(i);
+				}
+			}
+<%
+		}
+%>
+		}
 	}
 <%
 	} else if (OutputType.MULTISELECT == type) {
@@ -531,14 +753,18 @@ function setData(list, count) {
 
 	$(".fixHeight").fixHeight();
 }
-function applyGridSelection() {
+function applyGridSelection(onselectrow) {
 	$("#searchResult tr[id]").each(function() {
 		var rowid = $(this).attr("id");
 		var row = grid.getRowData(rowid);
 		var id = row.orgOid + "_" + row.orgVersion;
 		for (var i = 0; i < selectArray.length; i++) {
 			if (id == selectArray[i]) {
-				grid.setSelection(rowid);
+				if (typeof onselectrow === "boolean") {
+					grid.setSelection(rowid, onselectrow);
+				} else {
+					grid.setSelection(rowid);
+				}
 			}
 		}
 	});
@@ -562,6 +788,19 @@ function deselectCurrentPage() {
 			grid.setSelection(rowid);
 		}
 	});
+}
+var clearRowHighlight = function(rowIndex) {
+	var $rows = $("#searchResult tr.jqgrow");
+	if (rowIndex >= $rows.length) return;
+	//選択された行以外にハイライトをクリアします。
+	$rows.each(function(index) {
+		if (index != rowIndex) $(this).removeClass("ui-state-highlight");
+	});
+}
+var setRowHighlight = function (rowIndex) {
+	var $rows = $("#searchResult tr.jqgrow");
+	if (rowIndex >= $rows.length) return;
+	$rows.eq(rowIndex).addClass("ui-state-highlight");
 }
 var loadingOff = null;
 loadingOff = function(event, src) {
@@ -588,10 +827,25 @@ ${m:outputToken('FORM_XHTML', false)}
 <%
 	}
 %>
+<p>
 <%
 	if (OutputType.SEARCHRESULT == type && !section.isHideDelete() && canDelete) {
 %>
-<p><input type="button" value="${m:rs('mtp-gem-messages', 'generic.element.section.SearchResultSection.delete')}" class="gr-btn" onclick="doDelete()" /></p>
+<input type="button" value="${m:rs('mtp-gem-messages', 'generic.element.section.SearchResultSection.delete')}" class="gr-btn" onclick="doDelete()" />
+<%	}
+	if (OutputType.SEARCHRESULT == type && section.isShowBulkUpdate() && canUpdate) {
+		String bulkUpdateDisplayLabel = GemResourceBundleUtil.resourceString("generic.element.section.SearchResultSection.bulkUpdate");
+		String localizedBulkUpdateDisplayLabel = TemplateUtil.getMultilingualString(section.getBulkUpdateDisplayLabel(), section.getLocalizedBulkUpdateDisplayLabel());
+		if (StringUtil.isNotBlank(localizedBulkUpdateDisplayLabel)) {
+			bulkUpdateDisplayLabel = localizedBulkUpdateDisplayLabel;
+		}
+%>
+<input id="bulkUpdateBtn" type="button" value="<%=bulkUpdateDisplayLabel%>" class="gr-btn" onclick="doBulkUpdate(this)" />
+<%	} %>
+</p>
+<%
+	if (OutputType.SEARCHRESULT == type && !section.isHideDelete() && canDelete) {
+%>
 <div id="selectDeleteTypeDialog" title="${m:rs('mtp-gem-messages', 'generic.element.section.SearchResultSection.selectDeleteType')}" style="display:none;">
 <ul style="text-align:left; margin-left:15px;">
 <li>
@@ -686,6 +940,106 @@ function deleteRow(isConfirmed) {
 			doSearch($(":hidden[name='searchType']").val(), $(":hidden[name='offset']").val(), false, "delete");
 		}
 	});
+}
+</script>
+<%
+	}
+	if (OutputType.SEARCHRESULT == type && section.isShowBulkUpdate() && canUpdate) { %>
+<script>
+$(function() {
+	document.scriptContext["countBulkUpdate"] = function($frame, func) {
+		var type = $(":hidden[name='searchType']").val();
+		if (!validation(type)) return;
+
+		count("<%=CountCommand.WEBAPI_NAME%>", type, type + "Form", function(count) {
+			if(func && $.isFunction(func)){
+				func.call($frame, count);
+			}
+		});
+	}
+
+	document.scriptContext["bulkUpdateModalWindowCallback"] = function(id) {
+		if (typeof id === "undefined") return;
+		// 一括更新後行選択処理を実行する　
+		var selectAfterBulkUpdate = function() {
+			// 検索条件を元に一括更新の場合
+			if (id === "all") {
+				$("#cb_searchResult").trigger("click");
+			// 選択された行を一括更新
+			} else if ($.isArray(id)) {
+				selectArray = id;
+				applyGridSelection(false);
+			}
+			$(".result-block").off("iplassAfterSearch", selectAfterBulkUpdate);
+		}
+		$(".result-block").on("iplassAfterSearch", selectAfterBulkUpdate);
+		doSearch($(":hidden[name='searchType']").val(), $(":hidden[name='offset']").val(), false, "bulkUpdate");
+	}
+});
+function doBulkUpdate(target) {
+	var searchCondChanged = $(".chagne-condition").css("display") != "none";
+	if(searchCondChanged && !confirm('${m:rs("mtp-gem-messages", "generic.element.section.SearchResultSection.displayUnmatchBulk")}')) {
+		return false;
+	}
+
+	var type = $(":hidden[name='searchType']").val();
+	if (!validation(type)) return;
+
+	var ids = grid.getGridParam("selarrrow");
+	if(ids.length <= 0) {
+		alert("${m:rs('mtp-gem-messages', 'generic.element.section.SearchResultSection.selectBulkUpdateMsg')}");
+		return false;
+	}
+
+	var dialogOption = {resizable: true};
+<%
+	if (!section.isUseBulkView()) {
+%>
+		dialogOption.dialogHeight = 450;
+<%
+	}
+%>
+	var $bulkUpdateDialogTrigger = getDialogTrigger($(target).parent(), dialogOption);
+	$bulkUpdateDialogTrigger.click();
+
+	var oid = [];
+	var version = [];
+	for(var i=0; i< ids.length; ++i) {
+		var id = ids[i];
+		var row = grid.getRowData(id);
+		oid.push(id + "_" + row.orgOid);
+		version.push(id + "_" + row.orgVersion);
+	}
+
+	var target = getModalTarget(isSubModal);
+	var action = contextPath + '/' + '<%=StringUtil.escapeJavaScript(bulkEditAction) %>';
+	var $form = $("<form />").attr({method:"POST", action:action, target:target}).appendTo("body");
+
+	$(oid).each(function() {
+		$("<input />").attr({type:"hidden", name:"oid", value:this}).appendTo($form);
+	})
+	$(version).each(function() {
+		$("<input />").attr({type:"hidden", name:"version", value:this}).appendTo($form);
+	})
+
+	var searchCond = $(":hidden[name='searchCond']").val();
+	$("<input />").attr({type:"hidden", name:"searchCond", value:searchCond}).appendTo($form);
+
+	if ($("#cb_searchResult").is(":checked")) {
+		$("<input />").attr({type:"hidden", name:"selectAllPage", value:true}).appendTo($form);
+	}
+// 	var execType = $(":hidden[name='execType']").val();
+// 	$("<input />").attr({type:"hidden", name:"execType", value:execType}).appendTo($form);
+	var isSubModal = $("body.modal-body").length !== 0;
+	if (isSubModal) $("<input />").attr({type:"hidden", name:"modalTarget", value:target}).appendTo($form);
+	$form.submit();
+	$form.remove();
+}
+
+function closeBulkUpdateModalWindow() {
+	var isSubModal = $("body.modal-body").length !== 0;
+	var target = getModalTarget(isSubModal);
+	$("iframe[name='" + target + "']").parents("div.modal-dialog").find(".modal-close").click();
 }
 </script>
 <%

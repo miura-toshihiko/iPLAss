@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TimeZone;
 import java.util.function.Predicate;
 import java.util.stream.IntStream;
 
@@ -50,6 +51,7 @@ import org.iplass.mtp.util.StringUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -257,6 +259,8 @@ public class QueryCsvWriter implements AutoCloseable {
 
 		if (mapper == null) {
 			mapper = new ObjectMapper();
+			//for backward compatibility
+			mapper.configOverride(java.sql.Date.class).setFormat(JsonFormat.Value.forPattern("yyyy-MM-dd").withTimeZone(TimeZone.getDefault()));
 		}
 		try (StringWriter writer = new StringWriter()) {
 			mapper.writeValue(writer, value);

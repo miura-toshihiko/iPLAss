@@ -31,6 +31,7 @@ import org.iplass.adminconsole.view.annotation.InputType;
 import org.iplass.adminconsole.view.annotation.MetaFieldInfo;
 import org.iplass.adminconsole.view.annotation.generic.EntityViewField;
 import org.iplass.adminconsole.view.annotation.generic.FieldReferenceType;
+import org.iplass.mtp.view.generic.HasNestProperty;
 import org.iplass.mtp.view.generic.Jsp;
 import org.iplass.mtp.view.generic.Jsps;
 import org.iplass.mtp.view.generic.ViewConst;
@@ -43,7 +44,7 @@ import org.iplass.mtp.view.generic.ViewConst;
 @Jsps({
 	@Jsp(path="/jsp/gem/generic/editor/JoinPropertyEditor.jsp", key=ViewConst.DESIGN_TYPE_GEM)
 })
-public class JoinPropertyEditor extends CustomPropertyEditor {
+public class JoinPropertyEditor extends CustomPropertyEditor implements HasNestProperty {
 
 	/** SerialVersionUID */
 	private static final long serialVersionUID = 8692587638693854180L;
@@ -56,26 +57,31 @@ public class JoinPropertyEditor extends CustomPropertyEditor {
 	/** オブジェクト名 */
 	private String objectName;
 
-	/** フォーマット */
-	@MetaFieldInfo(
-			displayName="フォーマット",
-			displayNameKey="generic_editor_JoinPropertyEditor_formatDisplaNameKey",
-			description="複数のプロパティを組み合わせて表示するためのフォーマットです。<br>" +
-					"プロパティを指定する際は「${プロパティ名}」のように指定します。",
-			descriptionKey="generic_editor_JoinPropertyEditor_formatDescriptionKey"
-	)
-	@EntityViewField(
-			referenceTypes={FieldReferenceType.SEARCHRESULT, FieldReferenceType.DETAIL}
-	)
-	private String format;
-
 	/** プロパティエディタ */
 	@MetaFieldInfo(
 			displayName="プロパティエディタ",
 			displayNameKey="generic_editor_JoinPropertyEditor_editorDisplaNameKey",
 			required=true,
 			inputType=InputType.REFERENCE,
-			referenceClass=PropertyEditor.class,
+//			referenceClass=PropertyEditor.class,
+			fixedReferenceClass={
+				UserPropertyEditor.class,
+				AutoNumberPropertyEditor.class,
+				BinaryPropertyEditor.class,
+				BooleanPropertyEditor.class,
+				DatePropertyEditor.class,
+				TimePropertyEditor.class,
+				TimestampPropertyEditor.class,
+				ExpressionPropertyEditor.class,
+				DecimalPropertyEditor.class,
+				FloatPropertyEditor.class,
+				IntegerPropertyEditor.class,
+				SelectPropertyEditor.class,
+				StringPropertyEditor.class,
+				LongTextPropertyEditor.class,
+				ReferencePropertyEditor.class
+			},
+			displayOrder=100,
 			description="プロパティの型にあわせたプロパティエディタを選択してください",
 			descriptionKey="generic_editor_JoinPropertyEditor_editorDescriptionKey"
 	)
@@ -90,6 +96,7 @@ public class JoinPropertyEditor extends CustomPropertyEditor {
 			inputType=InputType.REFERENCE,
 			referenceClass=NestProperty.class,
 			multiple=true,
+			displayOrder=110,
 			description="このプロパティと組み合わせて表示する他のプロパティを指定します。",
 			descriptionKey="generic_editor_JoinPropertyEditor_propertiesDescriptionKey"
 	)
@@ -97,6 +104,34 @@ public class JoinPropertyEditor extends CustomPropertyEditor {
 			referenceTypes={FieldReferenceType.ALL}
 	)
 	private List<NestProperty> properties;
+
+	/** フォーマット */
+	@MetaFieldInfo(
+			displayName="フォーマット",
+			displayNameKey="generic_editor_JoinPropertyEditor_formatDisplaNameKey",
+			displayOrder=120,
+			description="複数のプロパティを組み合わせて表示するためのフォーマットです。<br>" +
+					"プロパティを指定する際は「${プロパティ名}」のように指定します。",
+			descriptionKey="generic_editor_JoinPropertyEditor_formatDescriptionKey"
+	)
+	@EntityViewField(
+			referenceTypes={FieldReferenceType.SEARCHRESULT, FieldReferenceType.DETAIL}
+	)
+	private String format;
+
+	@MetaFieldInfo(
+			displayName = "ネストプロパティの検証エラーメッセージをまとめて表示",
+			displayNameKey = "generic_editor_JoinPropertyEditor_showNestPropertyErrorsDisplaNameKey",
+			inputType = InputType.CHECKBOX,
+			displayOrder = 130,
+			description = "チェックの時はネストプロパティの検証エラーメッセージをまとめて表示します。<br>" +
+					"未チェックの時はネストプロパティの検証エラーメッセージをまとめて表示しません。",
+			descriptionKey = "generic_editor_JoinPropertyEditor_showNestPropertyErrorsDescriptionKey"
+	)
+	@EntityViewField(
+			referenceTypes= {FieldReferenceType.DETAIL, FieldReferenceType.BULK}
+	)
+	private boolean showNestPropertyErrors;
 
 	/**
 	 * オブジェクト名を取得します。
@@ -147,6 +182,22 @@ public class JoinPropertyEditor extends CustomPropertyEditor {
 	}
 
 	/**
+	 * ネストプロパティの検証エラーメッセージをまとめて表示を取得します。
+	 * @return ネストプロパティの検証エラーメッセージをまとめて表示
+	 */
+	public boolean isShowNestPropertyErrors() {
+		return showNestPropertyErrors;
+	}
+
+	/**
+	 * ネストプロパティの検証エラーメッセージをまとめて表示を設定します。
+	 * @param showNestPropertyErrors ネストプロパティの検証エラーメッセージをまとめて表示
+	 */
+	public void setShowNestPropertyErrors(boolean showNestPropertyErrors) {
+		this.showNestPropertyErrors = showNestPropertyErrors;
+	}
+
+	/**
 	 * プロパティを取得します。
 	 * @return プロパティ
 	 */
@@ -181,5 +232,10 @@ public class JoinPropertyEditor extends CustomPropertyEditor {
 		nestProperties.add(property);
 		nestProperties.addAll(properties);
 		return nestProperties;
+	}
+
+	@Override
+	public String getEntityName() {
+		return objectName;
 	}
 }

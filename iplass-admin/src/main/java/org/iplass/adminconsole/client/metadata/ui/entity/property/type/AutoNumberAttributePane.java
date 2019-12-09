@@ -25,6 +25,9 @@ import java.util.LinkedHashMap;
 import org.iplass.adminconsole.client.base.i18n.AdminClientMessageUtil;
 import org.iplass.adminconsole.client.base.rpc.AdminAsyncCallback;
 import org.iplass.adminconsole.client.base.tenant.TenantInfoHolder;
+import org.iplass.adminconsole.client.base.ui.widget.form.MtpForm2Column;
+import org.iplass.adminconsole.client.base.ui.widget.form.MtpSelectItem;
+import org.iplass.adminconsole.client.base.ui.widget.form.MtpTextItem;
 import org.iplass.adminconsole.client.base.util.SmartGWTUtil;
 import org.iplass.adminconsole.client.metadata.ui.entity.property.PropertyAttribute;
 import org.iplass.adminconsole.client.metadata.ui.entity.property.PropertyAttributePane;
@@ -36,22 +39,20 @@ import org.iplass.mtp.entity.definition.PropertyDefinition;
 import org.iplass.mtp.entity.definition.properties.AutoNumberProperty;
 import org.iplass.mtp.entity.definition.properties.NumberingType;
 
-import com.smartgwt.client.util.BooleanCallback;
+import com.smartgwt.client.types.Alignment;
 import com.smartgwt.client.util.SC;
-import com.smartgwt.client.widgets.Canvas;
-import com.smartgwt.client.widgets.IButton;
-import com.smartgwt.client.widgets.events.ClickEvent;
-import com.smartgwt.client.widgets.events.ClickHandler;
 import com.smartgwt.client.widgets.form.DynamicForm;
-import com.smartgwt.client.widgets.form.fields.CanvasItem;
+import com.smartgwt.client.widgets.form.fields.ButtonItem;
 import com.smartgwt.client.widgets.form.fields.SelectItem;
 import com.smartgwt.client.widgets.form.fields.TextItem;
-import com.smartgwt.client.widgets.layout.HLayout;
 import com.smartgwt.client.widgets.layout.VLayout;
 
 public class AutoNumberAttributePane extends VLayout implements PropertyAttributePane {
 
-	private DynamicForm form = new DynamicForm();
+	private DynamicForm form;
+
+	/** Format */
+	private TextItem txtFormatScript;
 
 	/** 開始値 */
 	private TextItem txtStartValue;
@@ -59,11 +60,8 @@ public class AutoNumberAttributePane extends VLayout implements PropertyAttribut
 	private TextItem txtFixedNumber;
 	/** 採番タイプ */
 	private SelectItem selNumberingType;
-	/** Format */
-	private TextItem txtFormatScript;
 
-	private IButton btnCurrent;
-	private IButton btnReset;
+	private ButtonItem btnCurrent;
 
 	private String defName;
 	private String savedPropertyName;
@@ -73,112 +71,76 @@ public class AutoNumberAttributePane extends VLayout implements PropertyAttribut
 	public AutoNumberAttributePane() {
 
 		setWidth100();
-//		setHeight100();
 		setAutoHeight();
 
-		txtStartValue = new TextItem();
-		txtStartValue.setTitle(rs("ui_metadata_entity_PropertyListGrid_startVal"));
-		txtStartValue.setKeyPressFilter(KEYFILTER_NUM);
-		txtStartValue.setWidth(40);
-		SmartGWTUtil.addHoverToFormItem(txtStartValue, rs("ui_metadata_entity_PropertyListGrid_startValComment"));
-		txtFixedNumber = new TextItem();
-		txtFixedNumber.setTitle(rs("ui_metadata_entity_PropertyListGrid_fixedNumDig"));
-		txtFixedNumber.setKeyPressFilter(KEYFILTER_NUM);
-		txtFixedNumber.setWidth(40);
-		SmartGWTUtil.addHoverToFormItem(txtFixedNumber, rs("ui_metadata_entity_PropertyListGrid_fixedNumDigComment"));
-		selNumberingType = new SelectItem();
-		selNumberingType.setTitle(rs("ui_metadata_entity_PropertyListGrid_numberingRules"));
-		selNumberingType.setWidth(200);
-		SmartGWTUtil.addHoverToFormItem(selNumberingType, rs("ui_metadata_entity_PropertyListGrid_numberingRulesComment1"));
-		txtFormatScript = new TextItem();
+		txtFormatScript = new MtpTextItem();
 		txtFormatScript.setTitle(rs("ui_metadata_entity_PropertyListGrid_formatScript"));
-		txtFormatScript.setWidth(450);
-		txtFormatScript.setColSpan(4);
+		txtFormatScript.setColSpan(3);
 		SmartGWTUtil.addHoverToFormItem(txtFormatScript, rs("ui_metadata_entity_PropertyListGrid_numberingRulesComment2"));
 		//ちょっとヒントが大きいので別ダイアログで表示
 		String contentsStyle = "style=\"margin-left:5px;\"";
 		String tableStyle = "style=\"border: thin gray solid;padding:5px;white-space:nowrap;\"";
 		SmartGWTUtil.addHintToFormItem(txtFormatScript,
 				"<br/>"
-				+ rs("ui_metadata_entity_PropertyListGrid_exampleTerm")
-				+ "<p " + contentsStyle + rs("ui_metadata_entity_PropertyListGrid_exampleFormat")
+
+				+ "<div>" + rs("ui_metadata_entity_PropertyListGrid_exampleTerm")
+				+ "<p " + contentsStyle + ">" + rs("ui_metadata_entity_PropertyListGrid_exampleFormat") + "</p>"
 				+ "</div>"
-				+ rs("ui_metadata_entity_PropertyListGrid_availBindVariable")
-				+ "<p " + contentsStyle + ">"
+
+				+ "<div><p><b>" + rs("ui_metadata_entity_PropertyListGrid_availBindVariable") + "</b></p>"
+
+				+ "<div " + contentsStyle + ">"
+
 				+ "<table style=\"border-collapse:collapse;\">"
-				+ "<tr><th " + tableStyle + rs("ui_metadata_entity_PropertyListGrid_format") + tableStyle
-				+ rs("ui_metadata_entity_PropertyListGrid_outputContent")
-				+ "<tr><td " + tableStyle + ">nextVal()</td><td "+ tableStyle + rs("ui_metadata_entity_PropertyListGrid_nextNumberingNum")
-				+ "<tr><td " + tableStyle + ">yyyy</td><td "+ tableStyle + rs("ui_metadata_entity_PropertyListGrid_year")
-				+ "<tr><td " + tableStyle + ">MM</td><td "+ tableStyle + rs("ui_metadata_entity_PropertyListGrid_month")
-				+ "<tr><td " + tableStyle + ">dd</td><td "+ tableStyle + rs("ui_metadata_entity_PropertyListGrid_day")
-				+ "<tr><td " + tableStyle + ">HH</td><td "+ tableStyle + rs("ui_metadata_entity_PropertyListGrid_hour")
-				+ "<tr><td " + tableStyle + ">mm</td><td "+ tableStyle + rs("ui_metadata_entity_PropertyListGrid_minute")
-				+ "<tr><td " + tableStyle + ">ss</td><td "+ tableStyle + rs("ui_metadata_entity_PropertyListGrid_second")
-				+ "<tr><td " + tableStyle + ">date</td><td "+ tableStyle + rs("ui_metadata_entity_PropertyListGrid_instansTimestamp")
-				+ "<tr><td " + tableStyle + ">user</td><td "+ tableStyle + rs("ui_metadata_entity_PropertyListGrid_userInfo")
-				+ "<tr><td " + tableStyle + ">entity</td><td "+ tableStyle + rs("ui_metadata_entity_PropertyListGrid_entity")
-				+ "</table></p></div>"
+				+ "<tr><th " + tableStyle + ">" + rs("ui_metadata_entity_PropertyListGrid_format")
+				+ "</th><th "+ tableStyle + ">" + rs("ui_metadata_entity_PropertyListGrid_outputContent") + "</th></tr>"
+
+				+ "<tr><td " + tableStyle + ">nextVal()</td><td "+ tableStyle + ">" + rs("ui_metadata_entity_PropertyListGrid_nextNumberingNum") + "</td></tr>"
+				+ "<tr><td " + tableStyle + ">yyyy</td><td "+ tableStyle + ">" + rs("ui_metadata_entity_PropertyListGrid_year") + "</td></tr>"
+				+ "<tr><td " + tableStyle + ">MM</td><td "+ tableStyle + ">" + rs("ui_metadata_entity_PropertyListGrid_month") + "</td></tr>"
+				+ "<tr><td " + tableStyle + ">dd</td><td "+ tableStyle + ">" + rs("ui_metadata_entity_PropertyListGrid_day") + "</td></tr>"
+				+ "<tr><td " + tableStyle + ">HH</td><td "+ tableStyle + ">" + rs("ui_metadata_entity_PropertyListGrid_hour") + "</td></tr>"
+				+ "<tr><td " + tableStyle + ">mm</td><td "+ tableStyle + ">" + rs("ui_metadata_entity_PropertyListGrid_minute") + "</td></tr>"
+				+ "<tr><td " + tableStyle + ">ss</td><td "+ tableStyle + ">" + rs("ui_metadata_entity_PropertyListGrid_second") + "</td></tr>"
+				+ "<tr><td " + tableStyle + ">date</td><td "+ tableStyle + ">" + rs("ui_metadata_entity_PropertyListGrid_instansTimestamp") + "</td></tr>"
+				+ "<tr><td " + tableStyle + ">user</td><td "+ tableStyle + ">" + rs("ui_metadata_entity_PropertyListGrid_userInfo") + "</td></tr>"
+				+ "<tr><td " + tableStyle + ">entity</td><td "+ tableStyle + ">" + rs("ui_metadata_entity_PropertyListGrid_entity") + "</td></tr>"
+
+				+ "</table></div></div>"
 				);
 
-		btnCurrent = new IButton("Current");
-		SmartGWTUtil.addHoverToCanvas(btnCurrent, rs("ui_metadata_entity_PropertyListGrid_returnCounterCurrent"));
-		btnCurrent.addClickHandler(new ClickHandler() {
+		txtStartValue = new MtpTextItem();
+		txtStartValue.setTitle(rs("ui_metadata_entity_PropertyListGrid_startVal"));
+		txtStartValue.setKeyPressFilter(KEYFILTER_NUM);
+		SmartGWTUtil.addHoverToFormItem(txtStartValue, rs("ui_metadata_entity_PropertyListGrid_startValComment"));
+
+		txtFixedNumber = new MtpTextItem();
+		txtFixedNumber.setTitle(rs("ui_metadata_entity_PropertyListGrid_fixedNumDig"));
+		txtFixedNumber.setKeyPressFilter(KEYFILTER_NUM);
+		SmartGWTUtil.addHoverToFormItem(txtFixedNumber, rs("ui_metadata_entity_PropertyListGrid_fixedNumDigComment"));
+
+		selNumberingType = new MtpSelectItem();
+		selNumberingType.setTitle(rs("ui_metadata_entity_PropertyListGrid_numberingRules"));
+		SmartGWTUtil.addHoverToFormItem(selNumberingType, rs("ui_metadata_entity_PropertyListGrid_numberingRulesComment1"));
+
+		btnCurrent = new ButtonItem();
+		btnCurrent.setWidth(100);
+		btnCurrent.setStartRow(false);
+		btnCurrent.setTitle("Current Value");
+		btnCurrent.setColSpan(2);
+		btnCurrent.setAlign(Alignment.RIGHT);
+		btnCurrent.setPrompt(SmartGWTUtil.getHoverString(rs("ui_metadata_entity_PropertyListGrid_showCurrentValueList")));
+		btnCurrent.addClickHandler(new com.smartgwt.client.widgets.form.fields.events.ClickHandler() {
 
 			@Override
-			public void onClick(ClickEvent event) {
+			public void onClick(com.smartgwt.client.widgets.form.fields.events.ClickEvent event) {
 				getCurrentCounter();
 			}
-		});
-		btnReset = new IButton("Reset");
-		SmartGWTUtil.addHoverToCanvas(btnReset, rs("ui_metadata_entity_PropertyListGrid_startValueCounterReset"));
-		btnReset.addClickHandler(new ClickHandler() {
 
-			@Override
-			public void onClick(ClickEvent event) {
-				String startValue = SmartGWTUtil.getStringValue(txtStartValue);
-				if (startValue == null || startValue.isEmpty()) {
-					SC.warn(rs("ui_metadata_entity_PropertyListGrid_startValueEmpty"));
-					return;
-				}
-				long startLongValue = -1;
-				try {
-					startLongValue = Long.parseLong(startValue);
-				} catch (NumberFormatException e) {
-					SC.warn(rs("ui_metadata_entity_PropertyListGrid_startValueNumber"));
-					return;
-				}
-				final long resetValue = startLongValue;
-				SC.ask(rs("ui_metadata_entity_PropertyListGrid_confirm"),
-						rs("ui_metadata_entity_PropertyListGrid_resetCounterCaution")
-						, new BooleanCallback() {
-					@Override
-					public void execute(Boolean value) {
-						if (value) {
-							resetCounter(resetValue);
-						}
-					}
-				});
-			}
 		});
-		CanvasItem canvasButtons = new CanvasItem("autoNumberButtons");
-		canvasButtons.setShowTitle(false);
-		canvasButtons.setStartRow(false);
-		canvasButtons.setEndRow(false);
-		HLayout pnlButtonsCanvas = new HLayout();
-		pnlButtonsCanvas.setAutoHeight();
-		Canvas canvasButtonsSpace = new Canvas();
-		canvasButtonsSpace.setWidth(5);
-		pnlButtonsCanvas.addMember(btnCurrent);
-		pnlButtonsCanvas.addMember(canvasButtonsSpace);
-		pnlButtonsCanvas.addMember(btnReset);
-		canvasButtons.setCanvas(pnlButtonsCanvas);
 
-		form.setMargin(5);
-		form.setNumCols(6);
-		form.setWidth100();
-		form.setHeight(60);
-		form.setItems(txtStartValue, txtFixedNumber, selNumberingType, txtFormatScript, canvasButtons);
+		form = new MtpForm2Column();
+		form.setItems(txtFormatScript, txtStartValue, txtFixedNumber, selNumberingType, btnCurrent);
 
 		addMember(form);
 
@@ -191,11 +153,9 @@ public class AutoNumberAttributePane extends VLayout implements PropertyAttribut
 
 		if (record.isInherited()) {
 			btnCurrent.setDisabled(true);
-			btnReset.setDisabled(true);
 		}
 		if (record.isInsert() || record.isDelete()) {
 			btnCurrent.setDisabled(true);
-			btnReset.setDisabled(true);
 		}
 
 		savedPropertyName = record.getSavedName();
@@ -234,7 +194,7 @@ public class AutoNumberAttributePane extends VLayout implements PropertyAttribut
 
 	@Override
 	public int panelHeight() {
-		return 80;
+		return 120;
 	}
 
 	private void initialize() {
@@ -253,47 +213,11 @@ public class AutoNumberAttributePane extends VLayout implements PropertyAttribut
 			public void onSuccess(PropertyDefinition pd) {
 
 				if (!(pd instanceof AutoNumberProperty)) {
-					SC.say(rs("ui_metadata_entity_PropertyListGrid_propertCannotGetTypeNotAutoNumberErr"));
+					SC.say(rs("ui_metadata_entity_PropertyListGrid_propertyCannotGetTypeNotAutoNumberErr"));
 					return;
 				}
-
-				service.getAutoNumberCurrentValue(TenantInfoHolder.getId(), defName, savedPropertyName, new AdminAsyncCallback<Long>() {
-
-					@Override
-					public void onSuccess(Long result) {
-						if (result == null) {
-							SC.say(rs("ui_metadata_entity_PropertyListGrid_completion"), rs("ui_metadata_entity_PropertyListGrid_counterValueNotSet"));
-						} else {
-							SC.say(rs("ui_metadata_entity_PropertyListGrid_completion"), rs("ui_metadata_entity_PropertyListGrid_currentValueNow") + result);
-						}
-					}
-
-				});
-			}
-
-		});
-
-	}
-
-	private void resetCounter(final long resetValue) {
-
-		checkEntityDefinition(new AdminAsyncCallback<PropertyDefinition>() {
-
-			@Override
-			public void onSuccess(PropertyDefinition pd) {
-				if (!(pd instanceof AutoNumberProperty)) {
-					SC.say(rs("ui_metadata_entity_PropertyListGrid_propertCannotResetTypeNotAutoNumberErr"));
-					return;
-				}
-
-				service.resetAutoNumberCounter(TenantInfoHolder.getId(), defName, savedPropertyName, resetValue, new AdminAsyncCallback<Void>() {
-
-					@Override
-					public void onSuccess(Void result) {
-						SC.say(rs("ui_metadata_entity_PropertyListGrid_completion"), rs("ui_metadata_entity_PropertyListGrid_resetComp"));
-					}
-
-				});
+				AutoNumberValueListDialog dialog = new AutoNumberValueListDialog(defName, savedPropertyName);
+				dialog.show();
 			}
 
 		});

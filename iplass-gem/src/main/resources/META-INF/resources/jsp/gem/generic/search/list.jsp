@@ -48,8 +48,8 @@
 <%@ page import="org.iplass.gem.command.ViewUtil"%>
 
 <%!
-	boolean isDispProperty(PropertyDefinition pd, PropertyColumn property) {
-		if (!property.isDispFlag()) return false;
+	boolean isDispProperty(String defName, PropertyDefinition pd, PropertyColumn property) {
+		if (!EntityViewUtil.isDisplayElement(defName, property.getElementRuntimeId(), OutputType.SEARCHRESULT)) return false;
 		if (property.getEditor() == null) return false;
 		return true;
 	}
@@ -59,9 +59,10 @@
 	}
 %>
 <%
- 	Integer height = (Integer) request.getAttribute("height");
 	EntityListParts parts = (EntityListParts) request.getAttribute("entityListParts");
 	if (parts == null) return;
+
+	SearchFormView form = (SearchFormView) request.getAttribute("searchFormView");
 
 	String topViewListOffsetInfo = request.getParameter(Constants.TOPVIEW_LIST_OFFSET);
 
@@ -83,29 +84,13 @@
 
 	EntityDefinitionManager edm = ManagerLocator.getInstance().getManager(EntityDefinitionManager.class);
 	EntityDefinition ed = edm.get(parts.getDefName());
+	String defName = parts.getDefName();
 
-	EntityViewManager evm = ManagerLocator.getInstance().getManager(EntityViewManager.class);
-	EntityView ev = evm.get(parts.getDefName());
-	SearchFormView form = null;
-	if (StringUtil.isBlank(parts.getViewName())) {
-		//デフォルトレイアウトを利用
-		if (ev != null && ev.getSearchFormViewNames().length > 0) {
-			//1件でもView定義があればその中からデフォルトレイアウトを探す
-			form = ev.getDefaultSearchFormView();
-		} else {
-			//何もなければ自動生成
-			form = FormViewUtil.createDefaultSearchFormView(ed);
-		}
-	} else {
-		//指定レイアウトを利用
-		if (ev != null) form = ev.getSearchFormView(parts.getViewName());
-	}
 	SearchResultSection section = form.getResultSection();
 
 	//ビュー名があればアクションの後につける
-	String urlPath = ViewUtil.getParamMappingPath(parts.getDefName(), parts.getViewName());
-
-	String contextPath = TemplateUtil.getTenantContextPath();
+	String urlPath = ViewUtil.getParamMappingPath(parts.getDefName(), 
+			parts.getViewNameForDetail() != null ? parts.getViewNameForDetail() : parts.getViewName());
 
 	//詳細表示アクション
 	String view = "";
@@ -125,11 +110,20 @@
 
 	//検索結果表示アクション
 	urlPath = ViewUtil.getParamMappingPath(parts.getDefName(), parts.getViewNameForLink());
-	String action = contextPath + "/" + SearchViewCommand.SEARCH_ACTION_NAME + urlPath;
+	String action = TemplateUtil.getTenantContextPath() + "/" + SearchViewCommand.SEARCH_ACTION_NAME + urlPath;
 	String params = "{";
 	params = params + "\"searchType\": \"" + searchType + "\"";
 	params = params + ", \"filterName\": \"" + parts.getFilterName() + "\"";
 	params = params + "}";
+
+	//Limit
+	Integer limit = ViewUtil.getSearchLimit(section);
+
+	//Height
+ 	Integer gridHeight = parts.getHeight();
+	if (gridHeight == null || gridHeight < 0) {
+		gridHeight = 160;
+	}
 
 	AuthContext auth = AuthContext.getCurrentContext();
 	boolean canUpdate = auth.checkPermission(new EntityPermission(ed.getName(), EntityPermission.Action.UPDATE));
@@ -148,11 +142,62 @@ ${m:esc(title)}
 </form>
 <script type="text/javascript">
 $(function() {
+	var cellAttrFunc = function (rowId, val, rowObject, colModel, rdata) {
+<%
+	if (section.isGroupingData()) {
+%>
+		var rowIndex = parseInt(rowId) - 1;
+		var data = grid.getGridParam("_data");
+		var row = data[rowIndex];
+		var colName = colModel.name;
+		if (rowIndex > 0) {
+			var beforeRow = data[rowIndex - 1];
+			//前の行と値が同じか確認
+			var dif = false;
+			if (row.orgOid != beforeRow.orgOid || row.orgVersion != beforeRow.orgVersion || row[colName] != beforeRow[colName]) {
+				dif = true;
+			}
+			if (!dif) return " style=\"display:none;\" ";//同じ場合は非表示にする
+		}
+		//この行から何行分rowspanを設定するか計算
+		var count = 0;
+		for (var i = rowIndex; i < data.length; i++) {
+			if (i >= data.length) break;
+			var nextRow = data[i];
+			var dif = false;
+			if (row.orgOid != nextRow.orgOid || row.orgVersion != nextRow.orgVersion || row[colName] != nextRow[colName]) {
+				dif = true;
+				break;
+			}
+			if (!dif) count++;
+			else break;
+		}
+		if (count > 1) return " style=\"vertical-align: center !important;\" rowspan=\"" + count + "\"";
+		else return null;
+<%
+	} else {
+%>
+		//definitionの設定がfalseなら結合しない
+		return null;
+<%
+	}
+%>
+	}
+
+	var clearRowHighlight = function(rowIndex) {
+		var $rows = $("#searchResult_<%=id%> tr.jqgrow");
+		if (rowIndex >= $rows.length) return;
+		//選択された行以外にハイライトをクリアします。
+		$rows.each(function(index) {
+			if (index != rowIndex) $(this).removeClass("ui-state-highlight");
+		});
+	}
+
 	var colModel = new Array();
 	var isloaded = false;
 	colModel.push({name:"orgOid", idnex:"orgOid", sortable:false, hidden:true, frozen:true, label:"oid"});
 	colModel.push({name:"orgVersion", idnex:"orgVersion", sortable:false, hidden:true, frozen:true, label:"version"});
-	colModel.push({name:'_mtpDetailLink', index:'_mtpDetailLink', width:78, sortable:false, align:'center', frozen:true, label:"", classes:"detail-links"});
+	colModel.push({name:'_mtpDetailLink', index:'_mtpDetailLink', width:${m:rs("mtp-gem-messages", "generic.search.list.detailLinkWidth")}, sortable:false, align:'center', frozen:true, label:"", classes:"detail-links", cellattr: cellAttrFunc});
 <%
 
 	for (Element element : section.getElements()) {
@@ -162,7 +207,7 @@ $(function() {
 			PropertyDefinition pd = EntityViewUtil.getPropertyDefinition(propName, ed);
 			String displayLabel = TemplateUtil.getMultilingualString(property.getDisplayLabel(), property.getLocalizedDisplayLabelList(), pd.getDisplayName(), pd.getLocalizedDisplayNameList());
 
-			if (isDispProperty(pd, property)) {
+			if (isDispProperty(defName, pd, property)) {
 				if (!(pd instanceof ReferenceProperty)) {
 					String sortPropName = StringUtil.escapeHtml(propName);
 					String width = "";
@@ -179,7 +224,7 @@ $(function() {
 						sortable = "sortable:false";
 					}
 %>
-	colModel.push({name:"<%=sortPropName%>", index:"<%=sortPropName%>", label:"<p class='title'><%=displayLabel%></p>", <%=sortable%><%=width%>});
+	colModel.push({name:"<%=sortPropName%>", index:"<%=sortPropName%>", label:"<p class='title'><%=displayLabel%></p>", <%=sortable%><%=width%>, cellattr: cellAttrFunc});
 <%
 				} else if (property.getEditor() instanceof ReferencePropertyEditor) {
 					//参照型のName以外を表示する場合
@@ -234,18 +279,13 @@ $(function() {
 			String style = property.getStyle() != null ? property.getStyle() : "";
 %>
 <%-- XSS対応-メタの設定のため対応なし(displayLabel,style) --%>
-colModel.push({name:"<%=propName%>", index:"<%=propName%>", classes:"<%=style%>", label:"<p class='title'><%=displayLabel%></p>", sortable:false, <%=width%><%=align%>});
+colModel.push({name:"<%=propName%>", index:"<%=propName%>", classes:"<%=style%>", label:"<p class='title'><%=displayLabel%></p>", sortable:false <%=width%><%=align%>});
 <%
 		}
 	}
 %>
 	var $table = $("#searchResult_<%=id%>");
-	var gridHeight;
-<% if (height != null && height > 0) { %>
-	var gridHeight = <%=height%>;
-<% } else { %>
-	var gridHeight = 160;
-<% } %>
+	var gridHeight = <%=gridHeight%>;
 	var grid = $table.jqGrid({
 		datatype: "local",
 		colModel: colModel,
@@ -276,10 +316,27 @@ colModel.push({name:"<%=propName%>", index:"<%=propName%>", classes:"<%=style%>"
 			}
 			return "stop";
 		}
+		,onSelectRow: function(rowid, e) {
+			var row = grid.getRowData(rowid);
+			var id = row.orgOid + "_" + row.orgVersion;
+			var rowIndex = parseInt(rowid) - 1;
+
+			clearRowHighlight(rowIndex);
+
+			if (e) {
+				$("#searchResult_<%=id%> tr[id]").each(function() {
+					var _rowid = $(this).attr("id");
+					if (_rowid == rowid) return;
+					var _row = grid.getRowData(_rowid);
+					var _id = _row.orgOid + "_" + _row.orgVersion;
+					if (id == _id) $(this).addClass("ui-state-highlight");
+				});
+			}
+		}
 	});
 
 	var offset = 0;
-	var limit = ${limit};
+	var limit = <%=limit%>;
 
 
 	var $parent = $table.parents("div.entity-list");
@@ -318,6 +375,7 @@ colModel.push({name:"<%=propName%>", index:"<%=propName%>", classes:"<%=style%>"
 			$pager.setPage(offset, list.length, count);
 
 			grid.clearGridData(true);
+			grid.setGridParam({"_data": list}).trigger("reloadGrid");
 			$(list).each(function(index) {
 
 				this["searchResultDataId"] = this.orgOid + "_" + this.orgVersion;

@@ -46,7 +46,8 @@
 	EntityViewManager evm = ManagerLocator.getInstance().getManager(EntityViewManager.class);
 
 	boolean isDispBitton = false;
-	if (button.isDispFlag() && (type != OutputType.EDIT || ViewUtil.dispElement(button))) {
+	if (EntityViewUtil.isDisplayElement(rootDefName, button.getElementRuntimeId(), type)
+			&& (type != OutputType.EDIT || ViewUtil.dispElement(button))) {
 		if (button.getDisplayType() == DisplayType.CUSTOM) {
 			//スクリプトで判定
 			isDispBitton = evm.isDisplayButton(rootDefName, button.getCustomDisplayTypeScriptKey(), type, entity);
@@ -88,13 +89,13 @@
 <td class="<c:out value="<%=cellStyle%>"/>">
 <%
 	if (isDispBitton) {
-		String cls = "gr-btn";
+		String cssClass = button.isPrimary() ? "gr-btn" : "gr-btn-02";
 		if (StringUtil.isNotBlank(button.getStyle())) {
-			cls += " " + button.getStyle();
+			cssClass += " " + button.getStyle();
 		}
 %>
 <%-- XSS対応-メタの設定のため対応なし(onclick) --%>
-<input type="button" value="<c:out value="<%=label %>"/>" class="<c:out value="<%=cls %>"/>" style="<c:out value="<%=customStyle%>"/>" onclick="<%=onclick %>" />
+<input type="button" value="<c:out value="<%=label %>"/>" class="<c:out value="<%=cssClass %>"/>" style="<c:out value="<%=customStyle%>"/>" onclick="<%=onclick %>" />
 <%
 	}
 %>

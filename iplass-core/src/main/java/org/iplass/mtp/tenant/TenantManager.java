@@ -22,7 +22,6 @@ package org.iplass.mtp.tenant;
 
 import org.iplass.mtp.definition.DefinitionModifyResult;
 import org.iplass.mtp.definition.TypedDefinitionManager;
-import org.iplass.mtp.impl.core.ExecuteContext;
 
 /**
  * テナント定義を管理するクラスのインタフェース。
@@ -32,8 +31,6 @@ public interface TenantManager extends TypedDefinitionManager<Tenant> {
 
 	/**
 	 * テナント情報を取得します。
-	 *
-	 * <p>対象とするテナントは {@link ExecuteContext#getClientTenantId()} より取得します。</p>
 	 *
 	 * @return {@link Tenant}
 	 */

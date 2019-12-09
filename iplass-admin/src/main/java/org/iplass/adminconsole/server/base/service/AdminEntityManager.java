@@ -20,6 +20,7 @@
 
 package org.iplass.adminconsole.server.base.service;
 
+import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.sql.Timestamp;
@@ -229,6 +230,11 @@ public class AdminEntityManager implements EntityManager {
 	}
 
 	@Override
+	public BinaryReference createBinaryReference(File file, String name, String type) {
+		return em.createBinaryReference(file, name, type);
+	}
+
+	@Override
 	public InputStream getInputStream(BinaryReference binaryReference) {
 		return em.getInputStream(binaryReference);
 	}
@@ -289,6 +295,11 @@ public class AdminEntityManager implements EntityManager {
 	@Override
 	public List<String> fulltextSearchOidList(String definitionName, String keyword) {
 		return em.fulltextSearchOidList(definitionName, keyword);
+	}
+
+	@Override
+	public <T extends Entity> SearchResult<T> fulltextSearchEntity(Query query, String keyword, SearchOption option) {
+		return em.fulltextSearchEntity(query, keyword, option);
 	}
 
 	@Override

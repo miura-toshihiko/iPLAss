@@ -72,10 +72,19 @@ public class WebApiEditPane extends MetaDataMainEditPane {
 	/** ヘッダ部分 */
 	private MetaCommonHeaderPane headerPane;
 	/** 共通属性部分 */
-	private MetaCommonAttributeSection commonSection;
+	private MetaCommonAttributeSection<WebApiDefinition> commonSection;
 
 	/** 共通属性部分 */
 	private WebApiAttributePane attributePane;
+
+	/** RestrictionRequest属性部分 */
+	private RestrictionRequestAttributePane restrictionRequestAttributePane;
+
+	/** CORS属性部分 */
+	private CorsAttributePane corsAttributePane;
+
+	/** OAuth属性部分 */
+	private OAuthAttributePane oauthAttributePane;
 
 	/** 受付種別部分 */
 	private RequestTypePane requestTypeGridPane;
@@ -85,13 +94,14 @@ public class WebApiEditPane extends MetaDataMainEditPane {
 	/** CommandConfig部分 */
 	private CommandConfigGridPane commandConfigPane;
 
+	/** ParamMap部分 */
+	private WebApiParamMapGridPane webApiParamMapPane;
+
 	/** Result部分 */
 	private ResultPane resultPane;
 
 	RestJsonParamPane jsonParamPane;
 	RestXmlParamPane xmlParamPane;
-
-//	JsonpPermitPane jsonpPermitPane;
 
 	ResponseTypePane responseTypePane;
 
@@ -115,10 +125,19 @@ public class WebApiEditPane extends MetaDataMainEditPane {
 		});
 
 		//共通属性
-		commonSection = new MetaCommonAttributeSection(targetNode, WebApiDefinition.class);
+		commonSection = new MetaCommonAttributeSection<>(targetNode, WebApiDefinition.class);
 
 		//属性編集部分
 		attributePane = new WebApiAttributePane();
+
+		//RestrictionRequest属性部分
+		restrictionRequestAttributePane = new RestrictionRequestAttributePane();
+
+		//CORS編集部分
+		corsAttributePane = new CorsAttributePane();
+
+		//OAuth編集部分
+		oauthAttributePane = new OAuthAttributePane();
 
 		// 受付種別選択部分
 		requestTypeGridPane = new RequestTypePane();
@@ -130,8 +149,6 @@ public class WebApiEditPane extends MetaDataMainEditPane {
 			}
 		});
 
-//		jsonpPermitPane = new JsonpPermitPane();
-
 		// 受付種別別変動部分
 		requestTypePane = new VLayout();
 		requestTypePane.setAutoHeight();
@@ -141,11 +158,17 @@ public class WebApiEditPane extends MetaDataMainEditPane {
 		//CommandConfig編集部分
 		commandConfigPane = new CommandConfigGridPane();
 
+		//ParamMap部分
+		webApiParamMapPane = new WebApiParamMapGridPane();
+
 		//Result部分
 		resultPane = new ResultPane();
 
 		//Section設定
-		MetaDataSectionStackSection webApiSection = createSection("WebApi Attribute", attributePane, requestTypeGridPane, /*jsonpPermitPane,*/ responseTypePane, requestTypePane, commandConfigPane, resultPane);
+		MetaDataSectionStackSection webApiSection = createSection("WebApi Attribute", attributePane,
+				restrictionRequestAttributePane, corsAttributePane, oauthAttributePane,
+				requestTypeGridPane, requestTypePane, responseTypePane, webApiParamMapPane,
+				commandConfigPane, resultPane);
 
 		//Drop設定
 		new AbstractMetaDataDropHandler() {
@@ -212,19 +235,17 @@ public class WebApiEditPane extends MetaDataMainEditPane {
 	 */
 	private void typeChanged(List<RequestType> list) {
 
-		List<HLayout> paramPaneList = new ArrayList<HLayout>();
+		List<HLayout> paramPaneList = new ArrayList<>();
 
 		if (list.contains(RequestType.REST_JSON)) {
 			if (jsonParamPane == null || requestTypePane.getMember(requestTypePane.getMemberNumber(jsonParamPane)) == null) {
 				jsonParamPane = new RestJsonParamPane();
 			}
-//			jsonpPermitPane.show();
 			paramPaneList.add(jsonParamPane);
 		} else {
 			if (jsonParamPane != null && requestTypePane.getMember(requestTypePane.getMemberNumber(jsonParamPane)) != null) {
 				requestTypePane.removeMember(jsonParamPane);
 			}
-//			jsonpPermitPane.hide();
 		}
 
 		if (list.contains(RequestType.REST_XML)) {
@@ -254,15 +275,12 @@ public class WebApiEditPane extends MetaDataMainEditPane {
 		this.curVersion = entry.getDefinitionInfo().getVersion();
 		this.curDefinitionId = entry.getDefinitionInfo().getObjDefId();
 
-		//共通属性
-		commonSection.setName(curDefinition.getName());
-		commonSection.setDisplayName(curDefinition.getDisplayName());
-		commonSection.setDescription(curDefinition.getDescription());
-
+		commonSection.setDefinition(curDefinition);
 		attributePane.setDefinition(curDefinition);
+		restrictionRequestAttributePane.setDefinition(curDefinition);
+		corsAttributePane.setDefinition(curDefinition);
+		oauthAttributePane.setDefinition(curDefinition);
 		requestTypeGridPane.setDefinition(curDefinition);
-
-//		jsonpPermitPane.setDefinition(curDefinition);
 
 		typeChanged(requestTypeGridPane.selectedType());
 
@@ -277,6 +295,7 @@ public class WebApiEditPane extends MetaDataMainEditPane {
 		}
 
 		commandConfigPane.setConfig(curDefinition.getCommandConfig());
+		webApiParamMapPane.setWebApiParamMap(curDefinition.getWebApiParamMap());
 		resultPane.setResults(curDefinition.getResults());
 	}
 
@@ -339,8 +358,12 @@ public class WebApiEditPane extends MetaDataMainEditPane {
 		public void onClick(ClickEvent event) {
 			boolean commonValidate = commonSection.validate();
 			boolean attrValidate = attributePane.validate();
+			boolean restrictionValidate = restrictionRequestAttributePane.validate();
+			boolean corsValidate = corsAttributePane.validate();
+			boolean oauthValidate = oauthAttributePane.validate();
 			boolean commandValidate = commandConfigPane.validate();
-			if (!commonValidate || !attrValidate || !commandValidate) {
+			boolean paramMapValidate = webApiParamMapPane.validate();
+			if (!commonValidate || !attrValidate || !restrictionValidate || !corsValidate || !oauthValidate || !commandValidate || !paramMapValidate) {
 				return;
 			}
 			SC.ask(AdminClientMessageUtil.getString("ui_metadata_webapi_WebAPIEditPane_saveConfirm"),
@@ -351,12 +374,13 @@ public class WebApiEditPane extends MetaDataMainEditPane {
 					if (value) {
 						WebApiDefinition definition = new WebApiDefinition();
 
-						definition.setName(commonSection.getName());
-						definition.setDisplayName(commonSection.getDisplayName());
-						definition.setDescription(commonSection.getDescription());
-
+						definition = commonSection.getEditDefinition(definition);
 						definition = attributePane.getEditDefinition(definition);
+						definition = restrictionRequestAttributePane.getEditDefinition(definition);
+						definition = corsAttributePane.getEditDefinition(definition);
+						definition = oauthAttributePane.getEditDefinition(definition);
 						definition.setCommandConfig(commandConfigPane.getEditCommandConfig());
+						definition = webApiParamMapPane.getEditDefinition(definition);
 						definition = requestTypeGridPane.getEditDefinition(definition);
 						definition = resultPane.getEditDefinition(definition);
 						if (jsonParamPane != null) {
@@ -365,7 +389,6 @@ public class WebApiEditPane extends MetaDataMainEditPane {
 						if (xmlParamPane != null) {
 							definition = xmlParamPane.getEditDefinition(definition);
 						}
-//						definition = jsonpPermitPane.getEditDefinition(definition);
 						definition = responseTypePane.getEditDefinition(definition);
 						updateWebAPI(definition, true);
 					}

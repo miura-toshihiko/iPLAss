@@ -1,19 +1,19 @@
 /*
  * Copyright (C) 2012 INFORMATION SERVICES INTERNATIONAL - DENTSU, LTD. All Rights Reserved.
- * 
+ *
  * Unless you have purchased a commercial license,
  * the following license terms apply:
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
  * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
@@ -67,14 +67,19 @@ public class Constants {
 	public static final String OUTPUT_TYPE = "outputType";
 	public static final String VIEW_TYPE = "viewType";
 	public static final String BACK_PATH = "backPath";
+	public static final String FROM_VIEW = "fromView";
 
 	public static final String VIEW_TYPE_DETAIL = "detail";
 	public static final String VIEW_TYPE_SEARCH = "search";
+	public static final String VIEW_TYPE_SEARCH_RESULT = "searchResult";
+	public static final String VIEW_TYPE_BULK = "bulk";
+	public static final String VIEW_TYPE_MULTI_BULK = "multiBulk";
 
 	public static final String FORM_SCRIPT_KEY = "formScriptKey";
 	public static final String SECTION_SCRIPT_KEY = "sectionScriptKey";
 
 	public static final String REF_LINK_VALUE = "linkValue";
+	public static final String REF_UNIQUE_VALUE = "uniqueValue";
 
 	public static final String ENTITY_DATA = "value";
 	public static final String ENTITY_DEFINITION = "entityDefinition";
@@ -96,6 +101,19 @@ public class Constants {
 	public static final String DETAIL_COND_VALUE = "dtlCndVl_";
 	public static final String DETAIL_COND_COUNT = "dtlCndCount";
 	public static final String DETAIL_COND_FILTER_EXPRESSION = "dtlCndFilterExpression";
+
+	public static final String BULK_UPDATE_SELECT_TYPE = "selectAllType";
+	public static final String BULK_UPDATE_SELECT_ALL_PAGE = "selectAllPage";
+	public static final String BULK_UPDATE_USE_BULK_VIEW = "useBulkView";
+	//一括更新のプロパティ名
+	public static final String BULK_UPDATE_PROP_NM = "bulkUpdatePropNm";
+	//一括更新データの件数
+	public static final String BULK_UPDATE_COUNT = "bulkUpdateCnt";
+	//一括更新されたプロパティ名
+	public static final String BULK_UPDATED_PROP_NM = "bulkUpdatedPropNm";
+	public static final String BULK_UPDATED_PROP_VALUE = "bulkUpdatedPropVl";
+	//一括更新されたデータの件数
+	public static final String BULK_UPDATED_COUNT = "bulkUpdatedCnt";
 
 	/** CSVダウンロード時の文字コード */
 	public static final String CSV_CHARACTER_CODE = "characterCode";
@@ -184,6 +202,14 @@ public class Constants {
 	public static final String SHOW_DETERMINE_BUTTON = "showDetermineButton";
 	public static final String PERMIT_CONDITION_SELECT_ALL = "permitConditionSelectAll";
 
+	//参照先エンティティ登録用
+	public static final String PARENT_DEFNAME = "parentDefName";
+	public static final String PARENT_VIEWNAME = "parentViewName";
+	public static final String PARENT_PROPNAME = "parentPropName";
+
+	//参照セクション用
+	public static final String REF_SECTION_INDEX = "referenceSectionIndex";
+
 	//自動補完
 	public static final String AUTOCOMPLETION_SETTING = "autocompletionSetting";
 	public static final String AUTOCOMPLETION_DEF_NAME = "autocompletionDefName";
@@ -264,6 +290,7 @@ public class Constants {
 	public static final String CMD_RSLT_STREAM = "streamData";
 
 	public static final String CMD_RSLT_JSP_ERROR = "/jsp/gem/generic/error.jsp";
+	public static final String CMD_RSLT_JSP_SYSTEM_ERROR = "/jsp/gem/error/Error.jsp";
 
 	public static final String CMD_RSLT_JSP_CALENDAR = "/jsp/gem/calendar/calendarView.jsp";
 	public static final String CMD_RSLT_JSP_CALENDAR_FILTER = "/jsp/gem/calendar/ref/calendarFilter.jsp";
@@ -287,8 +314,34 @@ public class Constants {
 	public static final String CMD_RSLT_JSP_LOGIN = "/jsp/gem/auth/Login.jsp";
 	public static final String CMD_RSLT_JSP_REAUTH = "/jsp/gem/auth/ReAuth.jsp";
 	public static final String CMD_RSLT_JSP_UPDATE_PASSWORD = "/jsp/gem/auth/Password.jsp";
+	public static final String CMD_RSLT_JSP_RESET_SPECIFIC_PASSWORD = "/jsp/gem/auth/specificPassword.jsp";
 	public static final String CMD_RSLT_JSP_PASSWORD_EXPIRE = "/jsp/gem/auth/Expire.jsp";
+	public static final String CMD_RSLT_JSP_VERIFY2ND = "/jsp/gem/auth/Verify2nd.jsp";
+	public static final String CMD_RSLT_JSP_BULK_EDIT="/jsp/gem/generic/bulk/bulkEdit.jsp";
+	public static final String CMD_RSLT_JSP_BULK_MULTI_EDIT="/jsp/gem/generic/bulk/edit.jsp";
+	public static final String CMD_RSLT_JSP_APP_MAINTENANCE="/jsp/gem/auth/application.jsp";
 	public static final String CMD_RSLT_HTML_PDFVIEWER_PATH = "/jsp/gem/binary/pdfviewer.jsp";
+
+	public static final String TEMPLATE_ERROR = "gem/generic/error";
+	public static final String TEMPLATE_COMMON_ERROR = "gem/generic/common/error";
+	public static final String TEMPLATE_SYSTEM_ERROR = "gem/error/system";
+	public static final String TEMPLATE_PERMISSION_ERROR = "gem/auth/PermissionError";
+
+	public static final String TEMPLATE_LOGIN = "gem/auth/Login";
+	public static final String TEMPLATE_PASSWORD_EXPIRE = "gem/auth/Expire";
+	public static final String TEMPLATE_VERIFY2ND = "gem/auth/Verify2nd";
+	public static final String TEMPLATE_UPDATE_PASSWORD = "gem/auth/Password";
+	public static final String TEMPLATE_REAUTH = "gem/auth/ReAuth";
+
+	public static final String TEMPLATE_VIEW = "gem/generic/detail/view";
+	public static final String TEMPLATE_REF_VIEW = "gem/generic/detail/ref/view";
+	public static final String TEMPLATE_EDIT = "gem/generic/detail/edit";
+	public static final String TEMPLATE_REF_EDIT = "gem/generic/detail/ref/edit";
+	public static final String TEMPLATE_COMPLETED = "gem/generic/detail/ref/completed";
+	public static final String TEMPLATE_BULK_EDIT="gem/generic/bulk/bulkEdit";
+	public static final String TEMPLATE_BULK_MULTI_EDIT="gem/generic/bulk/edit";
+	public static final String TEMPLATE_SEARCH = "gem/generic/search/search";
+	public static final String TEMPLATE_CSV_UPLOAD = "gem/generic/upload/csvUpload";
 
 	// LayoutAction
 	public static final String LAYOUT_NORMAL_ACTION = "gem/layout/defaultLayout";

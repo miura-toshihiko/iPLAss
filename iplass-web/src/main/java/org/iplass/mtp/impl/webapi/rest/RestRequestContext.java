@@ -32,11 +32,15 @@ import org.iplass.mtp.webapi.definition.RequestType;
 import org.iplass.mtp.webapi.definition.MethodType;;
 
 public class RestRequestContext extends WebRequestContext {
+	static final String WEB_API_RUNTIME_NAME = "mtp.restRequestContext.webApiRuntime";;
+	static final String MAX_BODY_SIZE = "mtp.restRequestContext.maxBodySize";;
+	
 	private RequestType requestType;
 	private MethodType methodType;
 	private Request rsRequest;
+	private boolean supportBearerToken;
 	
-	public RestRequestContext(ServletContext servletContext, HttpServletRequest req, Request rsRequest) {
+	public RestRequestContext(ServletContext servletContext, HttpServletRequest req, Request rsRequest, boolean supportBearerToken) {
 		super(servletContext, req);
 		this.rsRequest = rsRequest;
 		switch (rsRequest.getMethod()) {
@@ -55,10 +59,15 @@ public class RestRequestContext extends WebRequestContext {
 		default:
 			break;
 		}
+		this.supportBearerToken = supportBearerToken;
 	}
 	
 	public void setRequestType(RequestType requestType) {
 		this.requestType = requestType;
+	}
+	
+	public boolean supportBearerToken() {
+		return supportBearerToken;
 	}
 	
 	public Request rsRequest() {

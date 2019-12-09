@@ -1,19 +1,19 @@
 /*
  * Copyright (C) 2012 INFORMATION SERVICES INTERNATIONAL - DENTSU, LTD. All Rights Reserved.
- * 
+ *
  * Unless you have purchased a commercial license,
  * the following license terms apply:
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
  * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
@@ -67,9 +67,12 @@ import org.iplass.mtp.view.generic.EntityView;
 import org.iplass.mtp.view.generic.EntityViewManager;
 import org.iplass.mtp.view.generic.EntityViewUtil;
 import org.iplass.mtp.view.generic.FormViewUtil;
+import org.iplass.mtp.view.generic.OutputType;
 import org.iplass.mtp.view.generic.SearchFormView;
+import org.iplass.mtp.view.generic.editor.DateRangePropertyEditor;
 import org.iplass.mtp.view.generic.editor.JoinPropertyEditor;
 import org.iplass.mtp.view.generic.editor.NestProperty;
+import org.iplass.mtp.view.generic.editor.PropertyEditor;
 import org.iplass.mtp.view.generic.editor.ReferencePropertyEditor;
 import org.iplass.mtp.view.generic.editor.UserPropertyEditor;
 import org.iplass.mtp.view.generic.element.property.PropertyColumn;
@@ -79,8 +82,8 @@ import org.iplass.mtp.view.top.TopViewDefinitionManager;
 import org.iplass.mtp.view.top.parts.FulltextSearchViewParts;
 import org.iplass.mtp.view.top.parts.TopViewParts;
 import org.iplass.mtp.web.template.TemplateUtil;
-import org.iplass.mtp.webapi.definition.RequestType;
 import org.iplass.mtp.webapi.definition.MethodType;
+import org.iplass.mtp.webapi.definition.RequestType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -341,19 +344,25 @@ public final class FullTextSearchCommand implements Command {
 				.collect(Collectors.toList());
 
 		for (PropertyColumn p : properties) {
-			if (p.isDispFlag()) {
+			if (EntityViewUtil.isDisplayElement(ed.getName(), p.getElementRuntimeId(), OutputType.SEARCHRESULT)) {
 				String propName = p.getPropertyName();
 				if (p.getEditor() instanceof ReferencePropertyEditor) {
 					List<NestProperty> nest = ((ReferencePropertyEditor)p.getEditor()).getNestProperties();
-					addSearchProperty(select, ed, propName, nest.toArray(new NestProperty[nest.size()]));
+					addSearchProperty(select, ed, propName, p.getEditor(), nest.toArray(new NestProperty[nest.size()]));
 				} else if (p.getEditor() instanceof JoinPropertyEditor) {
-					addSearchProperty(select, ed, propName);
+					addSearchProperty(select, ed, propName, p.getEditor());
 					JoinPropertyEditor je = (JoinPropertyEditor) p.getEditor();
 					for (NestProperty nest : je.getProperties()) {
-						addSearchProperty(select, ed, nest.getPropertyName());
+						addSearchProperty(select, ed, nest.getPropertyName(), nest.getEditor());
+					}
+				} else if (p.getEditor() instanceof DateRangePropertyEditor) {
+					addSearchProperty(select, ed, propName, p.getEditor());
+					DateRangePropertyEditor de = (DateRangePropertyEditor) p.getEditor();
+					if (StringUtil.isNotBlank(de.getToPropertyName())) {
+						addSearchProperty(select, ed, de.getToPropertyName(), de.getToEditor());
 					}
 				} else {
-					addSearchProperty(select, ed, propName);
+					addSearchProperty(select, ed, propName, p.getEditor());
 				}
 			}
 		}
@@ -362,7 +371,7 @@ public final class FullTextSearchCommand implements Command {
 		return search;
 	}
 
-	private void addSearchProperty(List<String> select, EntityDefinition ed, String propName, NestProperty... nest) {
+	private void addSearchProperty(List<String> select, EntityDefinition ed, String propName, PropertyEditor editor, NestProperty... nest) {
 		PropertyDefinition pd = EntityViewUtil.getPropertyDefinition(propName, ed);
 		if (pd instanceof ReferenceProperty) {
 			if (!select.contains(propName + "." + Entity.NAME)) {
@@ -373,6 +382,9 @@ public final class FullTextSearchCommand implements Command {
 			}
 			if (!select.contains(propName + "." + Entity.VERSION)) {
 				select.add(propName + "." + Entity.VERSION);
+			}
+			if (editor instanceof ReferencePropertyEditor) {
+				addDisplayLabelProperty(select, ed, propName, (ReferencePropertyEditor) editor);
 			}
 			if (nest != null && nest.length > 0) {
 				EntityDefinition red = getReferenceEntityDefinition((ReferenceProperty) pd);
@@ -402,7 +414,15 @@ public final class FullTextSearchCommand implements Command {
 							ReferencePropertyEditor rpe = (ReferencePropertyEditor) np.getEditor();
 							if (!rpe.getNestProperties().isEmpty()) {
 								List<NestProperty> _nest = rpe.getNestProperties();
-								addSearchProperty(select, ed, nestPropName, _nest.toArray(new NestProperty[_nest.size()]));
+								addSearchProperty(select, ed, nestPropName, rpe, _nest.toArray(new NestProperty[_nest.size()]));
+							}
+							addDisplayLabelProperty(select, ed, nestPropName, rpe);
+						} else if (np.getEditor() instanceof JoinPropertyEditor) {
+							JoinPropertyEditor je = (JoinPropertyEditor) np.getEditor();
+							addSearchProperty(select, ed, nestPropName, je.getEditor());
+							if (!je.getProperties().isEmpty()) {
+								List<NestProperty> _nest = je.getProperties();
+								addSearchProperty(select, ed, propName, editor, _nest.toArray(new NestProperty[_nest.size()]));
 							}
 						}
 					}
@@ -412,6 +432,17 @@ public final class FullTextSearchCommand implements Command {
 			//検索から外しておく
 		} else {
 			if (!select.contains(propName)) select.add(propName);
+		}
+	}
+
+	protected void addDisplayLabelProperty(List<String> select, EntityDefinition ed, String propName, ReferencePropertyEditor rpe) {
+		if (rpe.getDisplayLabelItem() == null) return;
+
+		PropertyDefinition pd = EntityViewUtil.getPropertyDefinition(propName, ed);
+		if (pd instanceof ReferenceProperty) {
+			if (!select.contains(propName + "." + rpe.getDisplayLabelItem())) {
+				select.add(propName + "." + rpe.getDisplayLabelItem());
+			}
 		}
 	}
 
@@ -494,7 +525,7 @@ public final class FullTextSearchCommand implements Command {
 
 		colModel = new ColModel("_mtpDetailLink", "");
 		colModel.setFrozen(true);
-		colModel.setWidth(78);
+		colModel.setWidth(Integer.parseInt(getRS("detailLinkWidth")));
 		colModel.setAlign("center");
 		colModel.setClasses("detail-links");
 		colModels.add(colModel);
@@ -511,7 +542,7 @@ public final class FullTextSearchCommand implements Command {
 					property.getDisplayLabel(), property.getLocalizedDisplayLabelList(),
 					pd.getDisplayName(), pd.getLocalizedDisplayNameList());
 
-			if (property.isDispFlag()) {
+			if (EntityViewUtil.isDisplayElement(ed.getName(), property.getElementRuntimeId(), OutputType.SEARCHRESULT)) {
 				if (!(pd instanceof ReferenceProperty)) {
 					String sortPropName = StringUtil.escapeHtml(propName);
 					boolean frozen = false;
@@ -835,7 +866,8 @@ public final class FullTextSearchCommand implements Command {
 			try {
 				result.setValues(CreateSearchResultUtil.getHtmlData(
 						searchInfo.getSearchResult(), searchInfo.getEntityDefinition(),
-						searchInfo.getSearchFormView().getResultSection()));
+						searchInfo.getSearchFormView().getResultSection(),
+						searchInfo.getSearchFormView().getName()));
 			} catch (IOException e) {
 				throw new SystemException(e);
 			} catch (ServletException e) {

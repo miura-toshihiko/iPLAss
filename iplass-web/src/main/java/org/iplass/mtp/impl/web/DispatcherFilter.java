@@ -85,7 +85,6 @@ public class DispatcherFilter implements Filter {
 		ResourceHolder.init();//TODO ExecuteContextに紐付け
 
 		try {
-
 			//exclude path
 			if (path.getPathType() == PathType.UNKNOWN) {
 				if(logger.isTraceEnabled()) {
@@ -116,8 +115,14 @@ public class DispatcherFilter implements Filter {
 					logger.debug("do " + req.getRequestURL().toString() + " " + req.getMethod());
 				}
 
-				//EXCLUDE,SOAP以外を処理
+				//tenantContextPathより後を処理
 				switch (path.getPathType()) {
+				case REJECT:
+					if(logger.isDebugEnabled()) {
+						logger.debug("reject URL:" + req.getRequestURI());
+					}
+					res.sendError(HttpServletResponse.SC_NOT_FOUND);
+					return;
 				case REST:
 					req.setAttribute(RequestPath.ATTR_NAME, path);
 					servletContext.getRequestDispatcher(path.getTargetPath()).forward(req, res);
@@ -180,7 +185,7 @@ public class DispatcherFilter implements Filter {
 			}
 		}
 
-		WebRequestStack requestStack = new WebRequestStack(path, servletContext, req, res);
+		WebRequestStack requestStack = null;
 
 		try {
 			ActionMappingRuntime actionMapping = amService.getByPathHierarchy(actionPath);
@@ -197,11 +202,22 @@ public class DispatcherFilter implements Filter {
 
 			if (actionMapping != null) {
 				logger.debug("call actionMapping:" + actionMapping.getMetaData().getName());
-				actionMapping.executeCommand(requestStack);
+				
+				if (actionMapping.getRequestRestriction().maxBodySize() != -1) {
+					req = new LimitRequestBodyHttpServletRequest(req, actionMapping.getRequestRestriction().maxBodySize());
+				}
+				
+				requestStack = new WebRequestStack(path, servletContext, req, res);
+				
+				try {
+					actionMapping.executeCommand(requestStack);
+				} catch (RequestBodyTooLargeException e) {
+					res.sendError(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
+				}
 			} else {
 				res.sendError(HttpServletResponse.SC_NOT_FOUND);
 			}
-
+			
 		} finally {
 			//テンポラリで使用したリソースを削除。（内部でのincludeの時は削除しない）
 			if (requestStack != null) {
