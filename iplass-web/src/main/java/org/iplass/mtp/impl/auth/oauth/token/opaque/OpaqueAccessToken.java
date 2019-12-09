@@ -108,7 +108,7 @@ public class OpaqueAccessToken extends AccessToken {
 	}
 
 	@Override
-	public long getNotbefore() {
+	public long getNotBefore() {
 		return TimeUnit.MILLISECONDS.toSeconds(creationTime);
 	}
 

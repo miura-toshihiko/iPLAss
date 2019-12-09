@@ -192,6 +192,9 @@
 			Query q = new Query();
 			q.from(editor.getObjectName());
 			q.select(Entity.OID, Entity.NAME, Entity.VERSION);
+			if (editor.getDisplayLabelItem() != null) {
+				q.select().add(editor.getDisplayLabelItem());
+			}
 			if (condition != null) {
 				q.where(condition);
 			}
@@ -228,6 +231,14 @@
 
 		return TemplateUtil.getMultilingualString(fv.getTitle(), fv.getLocalizedTitleList(), ed.getDisplayName(), ed.getLocalizedDisplayNameList());
 	}
+	
+	String getDisplayPropLabel(ReferencePropertyEditor editor, Entity refEntity) {
+		String displayPropName = editor.getDisplayLabelItem();
+		if (displayPropName == null) {
+			displayPropName = Entity.NAME;
+		}
+		return refEntity.getValue(displayPropName);
+	}
 %>
 <%
 	ReferencePropertyEditor editor = (ReferencePropertyEditor) request.getAttribute(Constants.EDITOR_EDITOR);
@@ -242,6 +253,7 @@
 
 	String viewName = request.getParameter(Constants.VIEW_NAME);
 	String searchCond = request.getParameter(Constants.SEARCH_COND);
+	String defName = request.getParameter(Constants.DEF_NAME);
 
 
 	String propName = Constants.SEARCH_COND_PREFIX + editor.getPropertyName();
@@ -318,8 +330,9 @@ data-upperType="<c:out value="<%=upperType %>"/>"
 			for (Entity ref : entityList) {
 				String selected = "";
 				if (value.equals(ref.getOid())) selected = " selected";
+				String displayPropLabel = getDisplayPropLabel(editor, ref);
 %>
-<option value="<c:out value="<%=ref.getOid() %>"/>" <%=selected %>><c:out value="<%=ref.getName() %>" /></option>
+<option value="<c:out value="<%=ref.getOid() %>"/>" <%=selected %>><c:out value="<%=displayPropLabel %>" /></option>
 <%
 			}
 %>
@@ -332,9 +345,10 @@ data-upperType="<c:out value="<%=upperType %>"/>"
 <%
 			for (Entity ref : entityList) {
 				String selected = "";
+				String displayPropLabel = getDisplayPropLabel(editor, ref);
 				if (value.equals(ref.getOid())) selected = " selected";
 %>
-<option value="<c:out value="<%=ref.getOid() %>"/>" <%=selected %>><c:out value="<%=ref.getName() %>" /></option>
+<option value="<c:out value="<%=ref.getOid() %>"/>" <%=selected %>><c:out value="<%=displayPropLabel %>" /></option>
 <%
 			}
 %>
@@ -535,6 +549,9 @@ $(function() {
 		String _defName = editor.getObjectName();
 		String _viewName = editor.getViewName() != null ? editor.getViewName() : "";
 
+		if (viewName == null) viewName = "";
+		else viewName = StringUtil.escapeHtml(viewName);
+
 		String contextPath = TemplateUtil.getTenantContextPath();
 		String urlPath = ViewUtil.getParamMappingPath(_defName, _viewName);
 
@@ -569,13 +586,14 @@ $(function() {
 			for (int i = 0; i < propValue.length; i++) {
 				String oid = propValue[i];
 				Entity entity = em.load(oid, _defName);
-				if (entity == null || entity.getName() == null) continue;
+				String displayPropLabel = getDisplayPropLabel(editor, entity);
+				if (entity == null || displayPropLabel == null) continue;
 				String liId = "li_" + propName + i;
 				String linkId = propName + "_" + entity.getOid();
 				String key = entity.getOid() + "_" + entity.getVersion();
 %>
 <li id="<c:out value="<%=liId %>"/>" class="list-add">
-<a href="javascript:void(0)" class="modal-lnk"id="<c:out value="<%=linkId %>"/>" style="<c:out value="<%=customStyle%>"/>" onclick="showReference('<%=StringUtil.escapeJavaScript(view)%>', '<%=StringUtil.escapeJavaScript(_defName)%>', '<%=StringUtil.escapeJavaScript(entity.getOid())%>', '<%=entity.getVersion() %>', '<%=StringUtil.escapeJavaScript(linkId)%>', false)"><c:out value="<%=entity.getName() %>" /></a>
+<a href="javascript:void(0)" class="modal-lnk"id="<c:out value="<%=linkId %>"/>" style="<c:out value="<%=customStyle%>"/>" onclick="showReference('<%=StringUtil.escapeJavaScript(view)%>', '<%=StringUtil.escapeJavaScript(_defName)%>', '<%=StringUtil.escapeJavaScript(entity.getOid())%>', '<%=entity.getVersion() %>', '<%=StringUtil.escapeJavaScript(linkId)%>', false)"><c:out value="<%=displayPropLabel %>" /></a>
 <input type="button" value="${m:rs('mtp-gem-messages', 'generic.editor.reference.ReferencePropertyEditor_Edit.delete')}" class="gr-btn-02 del-btn" onclick="deleteItem('<%=StringUtil.escapeJavaScript(liId)%>')" />
 <input type="hidden" name="<c:out value="<%=propName %>"/>" value="<c:out value="<%=key %>"/>"/>
 </li>
@@ -591,14 +609,15 @@ $(function() {
 					int index = kv[1].lastIndexOf("_");
 					String oid = kv[1].substring(0, index);
 					Entity entity = em.load(oid,_defName);
-					if (entity == null || entity.getName() == null) continue;
+					String displayPropLabel = getDisplayPropLabel(editor, entity);
+					if (entity == null || displayPropLabel == null) continue;
 					String liId = "li_" + propName + i;
 					String linkId = propName + "_" + entity.getOid();
 					String key = entity.getOid() + "_" + entity.getVersion();
 					//hiddenにjavascriptで値上書きしないようにnorewrite属性をつけておく
 %>
 <li id="<c:out value="<%=liId %>"/>" class="list-add">
-<a href="javascript:void(0)" class="modal-lnk"id="<c:out value="<%=linkId %>"/>" style="<c:out value="<%=customStyle%>"/>" onclick="showReference('<%=StringUtil.escapeJavaScript(view)%>', '<%=StringUtil.escapeJavaScript(_defName)%>', '<%=StringUtil.escapeJavaScript(entity.getOid())%>', '<%=entity.getVersion() %>', '<%=StringUtil.escapeJavaScript(linkId)%>', false)"><c:out value="<%=entity.getName() %>" /></a>
+<a href="javascript:void(0)" class="modal-lnk"id="<c:out value="<%=linkId %>"/>" style="<c:out value="<%=customStyle%>"/>" onclick="showReference('<%=StringUtil.escapeJavaScript(view)%>', '<%=StringUtil.escapeJavaScript(_defName)%>', '<%=StringUtil.escapeJavaScript(entity.getOid())%>', '<%=entity.getVersion() %>', '<%=StringUtil.escapeJavaScript(linkId)%>', false)"><c:out value="<%=displayPropLabel %>" /></a>
 <input type="button" value="${m:rs('mtp-gem-messages', 'generic.editor.reference.ReferencePropertyEditor_Edit.delete')}" class="gr-btn-02 del-btn" onclick="deleteItem('<%=StringUtil.escapeJavaScript(liId)%>')" />
 <input type="hidden" name="<c:out value="<%=propName %>"/>" value="<c:out value="<%=key %>"/>" data-norewrite="true"/>
 </li>
@@ -624,6 +643,9 @@ $(function() {
 		, refEdit: false
 		, viewName: "<%=StringUtil.escapeJavaScript(_viewName) %>"
 		, permitConditionSelectAll: <%=editor.isPermitConditionSelectAll()%>
+		, parentDefName: "<%=StringUtil.escapeJavaScript(defName)%>"
+		, parentViewName: "<%=StringUtil.escapeJavaScript(viewName)%>"
+		, viewType: "<%=Constants.VIEW_TYPE_SEARCH %>"
 	}
 	var $selBtn = $(":button[id='<%=StringUtil.escapeJavaScript(selBtnId)%>']");
 	for (key in params) {
@@ -631,7 +653,7 @@ $(function() {
 	}
 	$selBtn.on("click", function() {
 		searchReference(params.selectAction, params.viewAction, params.defName, params.propName, params.multiplicity, <%=isMultiple%>,
-				 params.urlParam, params.refEdit, function(){}, null, params.viewName, params.permitConditionSelectAll);
+				 params.urlParam, params.refEdit, function(){}, null, params.viewName, params.permitConditionSelectAll, params.parentDefName, params.parentViewName, params.viewType);
 	});
 
 	<%-- common.js --%>
@@ -650,10 +672,11 @@ $(function() {
 <%			for (int i = 0; i < defaultValue.length; i++) {
 				String oid = defaultValue[i];
 				Entity entity = em.load(oid, _defName);
-				if (entity == null || entity.getName() == null) continue;
+				String displayPropLabel = getDisplayPropLabel(editor, entity);
+				if (entity == null || displayLabel == null) continue;
 
 				String liId = StringUtil.escapeJavaScript("li_" + propName + i);
-				String label = StringUtil.escapeJavaScript(entity.getName());
+				String label = StringUtil.escapeJavaScript(displayPropLabel);
 				String key = StringUtil.escapeJavaScript(entity.getOid() + "_" + entity.getVersion());
 %>
 		<%-- common.js --%>

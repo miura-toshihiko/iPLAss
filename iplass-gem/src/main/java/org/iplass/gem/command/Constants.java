@@ -1,19 +1,19 @@
 /*
  * Copyright (C) 2012 INFORMATION SERVICES INTERNATIONAL - DENTSU, LTD. All Rights Reserved.
- * 
+ *
  * Unless you have purchased a commercial license,
  * the following license terms apply:
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
  * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
@@ -67,6 +67,7 @@ public class Constants {
 	public static final String OUTPUT_TYPE = "outputType";
 	public static final String VIEW_TYPE = "viewType";
 	public static final String BACK_PATH = "backPath";
+	public static final String FROM_VIEW = "fromView";
 
 	public static final String VIEW_TYPE_DETAIL = "detail";
 	public static final String VIEW_TYPE_SEARCH = "search";
@@ -191,6 +192,11 @@ public class Constants {
 	public static final String SHOW_DETERMINE_BUTTON = "showDetermineButton";
 	public static final String PERMIT_CONDITION_SELECT_ALL = "permitConditionSelectAll";
 
+	//参照先エンティティ登録用
+	public static final String PARENT_DEFNAME = "parentDefName";
+	public static final String PARENT_VIEWNAME = "parentViewName";
+	public static final String PARENT_PROPNAME = "parentPropName";
+
 	//自動補完
 	public static final String AUTOCOMPLETION_SETTING = "autocompletionSetting";
 	public static final String AUTOCOMPLETION_DEF_NAME = "autocompletionDefName";
@@ -297,6 +303,7 @@ public class Constants {
 	public static final String CMD_RSLT_JSP_RESET_SPECIFIC_PASSWORD = "/jsp/gem/auth/specificPassword.jsp";
 	public static final String CMD_RSLT_JSP_PASSWORD_EXPIRE = "/jsp/gem/auth/Expire.jsp";
 	public static final String CMD_RSLT_JSP_BULK_EDIT="/jsp/gem/generic/bulk/bulkEdit.jsp";
+	public static final String CMD_RSLT_JSP_APP_MAINTENANCE="/jsp/gem/auth/application.jsp";
 	public static final String CMD_RSLT_HTML_PDFVIEWER_PATH = "/jsp/gem/binary/pdfviewer.jsp";
 
 	// LayoutAction

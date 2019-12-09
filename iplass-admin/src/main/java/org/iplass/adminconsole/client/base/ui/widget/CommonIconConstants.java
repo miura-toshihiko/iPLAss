@@ -20,13 +20,11 @@
 
 package org.iplass.adminconsole.client.base.ui.widget;
 
+/**
+ * @deprecated use {@link MtpWidgetConstants}
+ */
+@Deprecated
 public abstract class CommonIconConstants {
-
-	/** ヘルプ */
-	public static final String COMMON_ICON_HELP = "[SKINIMG]/actions/help.png";
-
-	/** メタデータ参照 */
-	public static final String COMMON_ICON_SHOW_META_DATA = "[SKINIMG]/actions/view.png";
 
 	/** リフレッシュ */
 	public static final String COMMON_ICON_REFRESH = "refresh.png";

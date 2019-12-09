@@ -28,7 +28,9 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import org.iplass.adminconsole.client.base.i18n.AdminClientMessageUtil;
+import org.iplass.adminconsole.client.base.ui.widget.EditablePane;
 import org.iplass.adminconsole.client.base.ui.widget.MetaDataSelectItem;
+import org.iplass.adminconsole.client.base.ui.widget.MetaDataSelectItem.ItemOption;
 import org.iplass.adminconsole.client.base.util.SmartGWTUtil;
 import org.iplass.mtp.auth.oauth.definition.ClientType;
 import org.iplass.mtp.auth.oauth.definition.GrantType;
@@ -43,7 +45,7 @@ import com.smartgwt.client.widgets.form.fields.TextAreaItem;
 import com.smartgwt.client.widgets.form.fields.TextItem;
 import com.smartgwt.client.widgets.layout.VLayout;
 
-public class OAuthClientAttributePane extends VLayout {
+public class OAuthClientAttributePane extends VLayout implements EditablePane<OAuthClientDefinition> {
 
 	/** ClientTypeの種類選択用Map */
 	private static LinkedHashMap<String, String> clientTypeMap;
@@ -57,7 +59,7 @@ public class OAuthClientAttributePane extends VLayout {
 
 	private DynamicForm form;
 
-	private MetaDataSelectItem selAuthorizationServer;
+	private SelectItem selAuthorizationServer;
 
 	private SelectItem selClientType;
 
@@ -83,6 +85,7 @@ public class OAuthClientAttributePane extends VLayout {
 		initialize();
 	}
 
+	@Override
 	public void setDefinition(OAuthClientDefinition definition) {
 
 		if (definition.getAuthorizationServer() != null) {
@@ -136,6 +139,7 @@ public class OAuthClientAttributePane extends VLayout {
 		txtPolicyUri.setValue(definition.getPolicyUri());
 	}
 
+	@Override
 	public OAuthClientDefinition getEditDefinition(OAuthClientDefinition definition) {
 
 		definition.setAuthorizationServer(SmartGWTUtil.getStringValue(selAuthorizationServer, true));
@@ -199,9 +203,8 @@ public class OAuthClientAttributePane extends VLayout {
 		form.setColWidths(100, 300, 100, 300, "*");
 		form.setMargin(5);
 
-		selAuthorizationServer = new MetaDataSelectItem(OAuthAuthorizationDefinition.class);
+		selAuthorizationServer = new MetaDataSelectItem(OAuthAuthorizationDefinition.class, new ItemOption(true, false));
 		selAuthorizationServer.setTitle("OAuth Authorization");
-		selAuthorizationServer.setWidth("100%");
 
 		selClientType = new SelectItem();
 		selClientType.setTitle("Client Type");
@@ -286,11 +289,16 @@ public class OAuthClientAttributePane extends VLayout {
 		addMember(form);
 	}
 
+	@Override
 	public boolean validate() {
 
 		boolean formValidate = form.validate();
 		boolean grantTypeValidate = formGrantType.validate();
 		return formValidate && grantTypeValidate;
+	}
+
+	@Override
+	public void clearErrors() {
 	}
 
 }

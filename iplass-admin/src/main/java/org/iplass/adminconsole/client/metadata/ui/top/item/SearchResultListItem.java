@@ -28,13 +28,17 @@ import org.iplass.adminconsole.client.base.event.DataChangedEvent;
 import org.iplass.adminconsole.client.base.event.DataChangedHandler;
 import org.iplass.adminconsole.client.base.i18n.AdminClientMessageUtil;
 import org.iplass.adminconsole.client.base.tenant.TenantInfoHolder;
-import org.iplass.adminconsole.client.base.ui.widget.AbstractWindow;
+import org.iplass.adminconsole.client.base.ui.widget.MetaDataLangTextItem;
+import org.iplass.adminconsole.client.base.ui.widget.MetaDataSelectItem;
+import org.iplass.adminconsole.client.base.ui.widget.MtpDialog;
+import org.iplass.adminconsole.client.base.ui.widget.form.MtpComboBoxItem;
+import org.iplass.adminconsole.client.base.ui.widget.form.MtpForm;
+import org.iplass.adminconsole.client.base.ui.widget.form.MtpSelectItem;
+import org.iplass.adminconsole.client.base.ui.widget.form.MtpTextItem;
 import org.iplass.adminconsole.client.base.util.SmartGWTUtil;
-import org.iplass.adminconsole.client.metadata.data.entity.EntityDS;
-import org.iplass.adminconsole.client.metadata.ui.common.LocalizedStringSettingDialog;
 import org.iplass.adminconsole.shared.metadata.rpc.MetaDataServiceAsync;
 import org.iplass.adminconsole.shared.metadata.rpc.MetaDataServiceFactory;
-import org.iplass.mtp.definition.LocalizedStringDefinition;
+import org.iplass.mtp.entity.definition.EntityDefinition;
 import org.iplass.mtp.view.filter.EntityFilter;
 import org.iplass.mtp.view.filter.EntityFilterItem;
 import org.iplass.mtp.view.generic.EntityView;
@@ -42,23 +46,19 @@ import org.iplass.mtp.view.top.parts.EntityListParts;
 
 import com.google.gwt.core.client.GWT;
 import com.google.gwt.user.client.rpc.AsyncCallback;
-import com.smartgwt.client.types.Alignment;
 import com.smartgwt.client.types.HeaderControls;
-import com.smartgwt.client.types.VerticalAlignment;
 import com.smartgwt.client.util.SC;
 import com.smartgwt.client.widgets.HeaderControl;
 import com.smartgwt.client.widgets.IButton;
 import com.smartgwt.client.widgets.events.ClickEvent;
 import com.smartgwt.client.widgets.events.ClickHandler;
 import com.smartgwt.client.widgets.form.DynamicForm;
-import com.smartgwt.client.widgets.form.fields.ButtonItem;
 import com.smartgwt.client.widgets.form.fields.ComboBoxItem;
 import com.smartgwt.client.widgets.form.fields.IntegerItem;
 import com.smartgwt.client.widgets.form.fields.SelectItem;
 import com.smartgwt.client.widgets.form.fields.TextItem;
 import com.smartgwt.client.widgets.form.fields.events.ChangedEvent;
 import com.smartgwt.client.widgets.form.fields.events.ChangedHandler;
-import com.smartgwt.client.widgets.layout.HLayout;
 
 /**
  *
@@ -115,15 +115,13 @@ public class SearchResultListItem extends PartsItem {
 		dialog.show();
 	}
 
-	private class EntityListItemSettingDialog extends AbstractWindow {
+	private class EntityListItemSettingDialog extends MtpDialog {
 
 		private TextItem iconTagField;
 		private ComboBoxItem viewField;
 		private ComboBoxItem viewForLinkField;
 		private SelectItem filterField;
 		private IntegerItem heightField;
-		private ButtonItem langBtn;
-		private List<LocalizedStringDefinition> localizedTitleList;
 
 		private List<DataChangedHandler> handlers = new ArrayList<DataChangedHandler>();
 
@@ -131,48 +129,31 @@ public class SearchResultListItem extends PartsItem {
 		 * コンストラクタ
 		 */
 		public EntityListItemSettingDialog() {
-			setTitle("SearchResult List");
-			setHeight(280);
-			setWidth(430);
-			setMargin(10);
-			setMembersMargin(10);
 
-			setShowMinimizeButton(false);
-			setIsModal(true);
-			setShowModalMask(true);
+			setTitle("SearchResult List");
+			setHeight(300);
 			centerInPage();
 
-			final DynamicForm form = new DynamicForm();
-			form.setAlign(Alignment.CENTER);
+			final DynamicForm form = new MtpForm();
 			form.setAutoFocus(true);
-			form.setNumCols(3);
 
-			final SelectItem entityField = new SelectItem("entity", "Entity");
-			entityField.setWidth(250);
-			EntityDS.setDataSource(entityField);
+			final SelectItem entityField = new MetaDataSelectItem(EntityDefinition.class, "Entity");
 			SmartGWTUtil.setRequired(entityField);
 			entityField.setValue(parts.getDefName());
-			entityField.setColSpan(3);
 
-			viewField = new ComboBoxItem("view", "ResultList View");
-			viewField.setWidth(250);
+			viewField = new MtpComboBoxItem("view", "ResultList View");
 			viewField.setDisabled(true);
 			viewField.setValue(parts.getViewName());
-			viewField.setColSpan(3);
 
-			viewForLinkField = new ComboBoxItem("viewForLink", "Link Action View");
-			viewForLinkField.setWidth(250);
+			viewForLinkField = new MtpComboBoxItem("viewForLink", "Link Action View");
 			viewForLinkField.setDisabled(true);
 			viewForLinkField.setValue(parts.getViewNameForLink());
-			viewForLinkField.setColSpan(3);
 
 			getViewList(parts.getDefName());
 
-			filterField = new SelectItem("filter", "Filter");
-			filterField.setWidth(250);
+			filterField = new MtpSelectItem("filter", "Filter");
 			filterField.setDisabled(true);
 			filterField.setValue(parts.getFilterName());
-			filterField.setColSpan(3);
 			getFilterList(parts.getDefName());
 
 			entityField.addChangedHandler(new ChangedHandler() {
@@ -196,46 +177,22 @@ public class SearchResultListItem extends PartsItem {
 				}
 			});
 
-			final TextItem titleField = new TextItem("title", "Title");
-			titleField.setWidth(165);
+			final MetaDataLangTextItem titleField = new MetaDataLangTextItem();
+			titleField.setTitle("Title");
 			titleField.setValue(parts.getTitle());
+			titleField.setLocalizedList(parts.getLocalizedTitleList());
 
-			langBtn = new ButtonItem("addDisplayName", "Languages");
-			langBtn.setShowTitle(false);
-			langBtn.setIcon("world.png");
-			langBtn.setStartRow(false);	//これを指定しないとButtonの場合、先頭にくる
-			langBtn.setEndRow(false);	//これを指定しないと次のFormItemが先頭にいく
-			langBtn.setPrompt(AdminClientMessageUtil.getString("ui_metadata_top_item_EntityListItem_eachLangDspName"));
-			langBtn.addClickHandler(new com.smartgwt.client.widgets.form.fields.events.ClickHandler() {
-
-				@Override
-				public void onClick(com.smartgwt.client.widgets.form.fields.events.ClickEvent event) {
-					if (localizedTitleList == null) {
-						localizedTitleList = new ArrayList<LocalizedStringDefinition>();
-					}
-					LocalizedStringSettingDialog dialog = new LocalizedStringSettingDialog(localizedTitleList);
-					dialog.show();
-				}
-			});
-			localizedTitleList = parts.getLocalizedTitleList();
-
-			iconTagField = new TextItem("iconTag", "Icon Tag");
-			iconTagField.setWidth(250);
+			iconTagField = new MtpTextItem("iconTag", "Icon Tag");
 			iconTagField.setValue(parts.getIconTag());
-			iconTagField.setColSpan(3);
 			SmartGWTUtil.addHoverToFormItem(iconTagField, AdminClientMessageUtil.getString("ui_metadata_top_item_EntityListItem_iconTagComment"));
 
 			heightField = new IntegerItem("height", "Height");
-			heightField.setWidth(250);
+			heightField.setWidth("100%");
 			heightField.setValue(parts.getHeight());
-			heightField.setColSpan(3);
 
-			form.setItems(entityField, viewField, viewForLinkField, filterField, titleField, langBtn, iconTagField, heightField);
+			form.setItems(entityField, viewField, viewForLinkField, filterField, titleField, iconTagField, heightField);
 
-			HLayout footer = new HLayout(5);
-			footer.setMargin(10);
-			footer.setWidth100();
-			footer.setAlign(VerticalAlignment.CENTER);
+			container.addMember(form);
 
 			IButton save = new IButton("OK");
 			save.addClickHandler(new ClickHandler() {
@@ -249,7 +206,7 @@ public class SearchResultListItem extends PartsItem {
 						parts.setTitle(SmartGWTUtil.getStringValue(titleField));
 						parts.setIconTag(SmartGWTUtil.getStringValue(iconTagField));
 						parts.setHeight(heightField.getValueAsInteger());
-						parts.setLocalizedTitleList(localizedTitleList);
+						parts.setLocalizedTitleList(titleField.getLocalizedList());
 						fireDataChanged();
 						destroy();
 					}
@@ -264,9 +221,6 @@ public class SearchResultListItem extends PartsItem {
 			});
 
 			footer.setMembers(save, cancel);
-
-			addItem(form);
-			addItem(footer);
 		}
 
 		private void getViewList(String defName) {

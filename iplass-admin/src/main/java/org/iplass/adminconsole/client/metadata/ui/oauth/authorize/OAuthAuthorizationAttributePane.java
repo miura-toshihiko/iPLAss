@@ -23,18 +23,21 @@ package org.iplass.adminconsole.client.metadata.ui.oauth.authorize;
 import java.util.Arrays;
 
 import org.iplass.adminconsole.client.base.i18n.AdminClientMessageUtil;
+import org.iplass.adminconsole.client.base.ui.widget.EditablePane;
 import org.iplass.adminconsole.client.base.ui.widget.MetaDataSelectItem;
+import org.iplass.adminconsole.client.base.ui.widget.MetaDataSelectItem.ItemOption;
 import org.iplass.adminconsole.client.base.util.SmartGWTUtil;
 import org.iplass.mtp.auth.oauth.definition.OAuthAuthorizationDefinition;
 import org.iplass.mtp.web.template.definition.TemplateDefinition;
 
 import com.smartgwt.client.widgets.form.DynamicForm;
 import com.smartgwt.client.widgets.form.fields.CanvasItem;
+import com.smartgwt.client.widgets.form.fields.SelectItem;
 import com.smartgwt.client.widgets.form.fields.TextAreaItem;
 import com.smartgwt.client.widgets.form.fields.TextItem;
 import com.smartgwt.client.widgets.layout.VLayout;
 
-public class OAuthAuthorizationAttributePane extends VLayout {
+public class OAuthAuthorizationAttributePane extends VLayout implements EditablePane<OAuthAuthorizationDefinition> {
 
 	private DynamicForm form;
 
@@ -42,7 +45,7 @@ public class OAuthAuthorizationAttributePane extends VLayout {
 
 	private ScopeGridPane gridScopes;
 
-	private MetaDataSelectItem selConsentTemplate;
+	private SelectItem selConsentTemplate;
 
 	private ClientPolicyGridPane gridClientPolicies;
 
@@ -54,6 +57,7 @@ public class OAuthAuthorizationAttributePane extends VLayout {
 		initialize();
 	}
 
+	@Override
 	public void setDefinition(OAuthAuthorizationDefinition definition) {
 
 		if (definition.getAvailableRoles() != null) {
@@ -82,6 +86,7 @@ public class OAuthAuthorizationAttributePane extends VLayout {
 		txtIssuerUri.setValue(definition.getIssuerUri());
 	}
 
+	@Override
 	public OAuthAuthorizationDefinition getEditDefinition(OAuthAuthorizationDefinition definition) {
 
 		String availableRolesText = SmartGWTUtil.getStringValue(txaAvailableRoles, true);
@@ -134,9 +139,8 @@ public class OAuthAuthorizationAttributePane extends VLayout {
 		canvasScopes.setColSpan(3);
 		canvasScopes.setStartRow(true);
 
-		selConsentTemplate = new MetaDataSelectItem(TemplateDefinition.class);
+		selConsentTemplate = new MetaDataSelectItem(TemplateDefinition.class, new ItemOption(true, false));
 		selConsentTemplate.setTitle("Consent Template");
-		selConsentTemplate.setWidth("100%");
 
 		gridClientPolicies = new ClientPolicyGridPane();
 		CanvasItem canvasClientPolicies = new CanvasItem();
@@ -164,6 +168,7 @@ public class OAuthAuthorizationAttributePane extends VLayout {
 		addMember(form);
 	}
 
+	@Override
 	public boolean validate() {
 
 		boolean formValidate = form.validate();
@@ -172,6 +177,10 @@ public class OAuthAuthorizationAttributePane extends VLayout {
 		boolean pnlSubjectIdentifierTypeValidate = pnlSubjectIdentifierType.validate();
 
 		return formValidate && gridScopesValidate && gridClientPoliciesValidate && pnlSubjectIdentifierTypeValidate;
+	}
+
+	@Override
+	public void clearErrors() {
 	}
 
 }

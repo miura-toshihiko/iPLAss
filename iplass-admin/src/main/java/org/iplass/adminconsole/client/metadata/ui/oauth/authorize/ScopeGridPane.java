@@ -26,12 +26,15 @@ import java.util.List;
 import org.iplass.adminconsole.client.base.event.DataChangedEvent;
 import org.iplass.adminconsole.client.base.event.DataChangedHandler;
 import org.iplass.adminconsole.client.base.i18n.AdminClientMessageUtil;
-import org.iplass.adminconsole.client.base.ui.widget.AbstractWindow;
-import org.iplass.adminconsole.client.base.ui.widget.CommonIconConstants;
 import org.iplass.adminconsole.client.base.ui.widget.EditablePane;
 import org.iplass.adminconsole.client.base.ui.widget.MetaDataLangTextItem;
+import org.iplass.adminconsole.client.base.ui.widget.MtpDialog;
+import org.iplass.adminconsole.client.base.ui.widget.MtpWidgetConstants;
 import org.iplass.adminconsole.client.base.ui.widget.ScriptEditorDialogHandler;
 import org.iplass.adminconsole.client.base.ui.widget.ScriptEditorDialogMode;
+import org.iplass.adminconsole.client.base.ui.widget.form.MtpForm;
+import org.iplass.adminconsole.client.base.ui.widget.form.MtpTextAreaItem;
+import org.iplass.adminconsole.client.base.ui.widget.form.MtpTextItem;
 import org.iplass.adminconsole.client.base.util.SmartGWTUtil;
 import org.iplass.adminconsole.client.metadata.ui.MetaDataUtil;
 import org.iplass.adminconsole.client.metadata.ui.common.LocalizedStringSettingDialog;
@@ -44,7 +47,6 @@ import org.iplass.mtp.definition.LocalizedStringDefinition;
 
 import com.smartgwt.client.types.AutoFitWidthApproach;
 import com.smartgwt.client.types.Overflow;
-import com.smartgwt.client.types.VerticalAlignment;
 import com.smartgwt.client.widgets.IButton;
 import com.smartgwt.client.widgets.events.ClickEvent;
 import com.smartgwt.client.widgets.events.ClickHandler;
@@ -108,6 +110,10 @@ public class ScopeGridPane extends VLayout implements EditablePane<OAuthAuthoriz
 	@Override
 	public boolean validate() {
 		return grid.validate();
+	}
+
+	@Override
+	public void clearErrors() {
 	}
 
 	private static class ScopeGrid extends ListGrid implements EditablePane<OAuthAuthorizationDefinition> {
@@ -189,6 +195,10 @@ public class ScopeGridPane extends VLayout implements EditablePane<OAuthAuthoriz
 			return true;
 		}
 
+		@Override
+		public void clearErrors() {
+		}
+
 		public void addScope() {
 			editScope(null);
 		}
@@ -233,7 +243,7 @@ public class ScopeGridPane extends VLayout implements EditablePane<OAuthAuthoriz
 
 	}
 
-	private static class ScopeEditDialog extends AbstractWindow {
+	private static class ScopeEditDialog extends MtpDialog implements MtpWidgetConstants {
 
 		private DynamicForm form;
 
@@ -249,47 +259,29 @@ public class ScopeGridPane extends VLayout implements EditablePane<OAuthAuthoriz
 		public ScopeEditDialog() {
 
 			setHeight(450);
-			setWidth(500);
 			setTitle("Scope");
-
-			setShowMinimizeButton(false);
-			setShowMaximizeButton(false);
-			setCanDragResize(true);
-			setIsModal(true);
-			setShowModalMask(true);
-
 			centerInPage();
 
-			form = new DynamicForm();
-			form.setWidth100();
-			form.setNumCols(3);	//間延びしないように最後に１つ余分に作成
-			form.setColWidths(100, 300, "*");
-			form.setMargin(5);
+			form = new MtpForm();
 
-			txtName = new TextItem();
+			txtName = new MtpTextItem();
 			txtName.setTitle("Name");
-			txtName.setWidth("100%");
-			txtName.setBrowserSpellCheck(false);
 			SmartGWTUtil.setRequired(txtName);
 			txtName.setRequired(true);	//TODO 直接指定しないと効かない
 
 			txtDisplayName = new MetaDataLangTextItem();
 			txtDisplayName.setTitle("Display Name");
-			txtDisplayName.setWidth("100%");
-			txtDisplayName.setBrowserSpellCheck(false);
 
-			txaDescription = new TextAreaItem();
+			txaDescription = new MtpTextAreaItem();
 			txaDescription.setTitle("Description");
-			txaDescription.setWidth("100%");
 			txaDescription.setHeight(55);
-			txaDescription.setBrowserSpellCheck(false);
 
 			SpacerItem spacer = new SpacerItem();
 			spacer.setStartRow(true);
 
 			ButtonItem btbDescLang = new ButtonItem();
 			btbDescLang.setTitle("Description Lang");
-			btbDescLang.setIcon(CommonIconConstants.COMMON_ICON_LANG);
+			btbDescLang.setIcon(ICON_LANG);
 			btbDescLang.setShowTitle(false);
 			btbDescLang.setStartRow(false);
 			btbDescLang.setEndRow(false);
@@ -320,17 +312,7 @@ public class ScopeGridPane extends VLayout implements EditablePane<OAuthAuthoriz
 
 			form.setItems(txtName, txtDisplayName, txaDescription, spacer, btbDescLang, canvasClaims);
 
-			VLayout contents = new VLayout(5);
-			contents.setHeight100();
-			contents.setOverflow(Overflow.AUTO);
-			contents.setMembers(form);
-
-			HLayout footer = new HLayout(5);
-			footer.setMargin(10);
-			footer.setAutoHeight();
-			footer.setWidth100();
-			footer.setAlign(VerticalAlignment.CENTER);
-			footer.setOverflow(Overflow.VISIBLE);
+			container.setMembers(form);
 
 			IButton btnOK = new IButton("OK");
 			btnOK.addClickHandler(new ClickHandler() {
@@ -349,11 +331,6 @@ public class ScopeGridPane extends VLayout implements EditablePane<OAuthAuthoriz
 			});
 
 			footer.setMembers(btnOK, btnCancel);
-
-			addItem(contents);
-			addItem(SmartGWTUtil.separator());
-			addItem(footer);
-
 		}
 
 		public void setDefinition(ScopeDefinition definition) {
@@ -452,6 +429,10 @@ public class ScopeGridPane extends VLayout implements EditablePane<OAuthAuthoriz
 			return grid.validate();
 		}
 
+		@Override
+		public void clearErrors() {
+		}
+
 		public boolean isEmpty() {
 
 			return grid.getRecordList().isEmpty();
@@ -547,6 +528,10 @@ public class ScopeGridPane extends VLayout implements EditablePane<OAuthAuthoriz
 			return true;
 		}
 
+		@Override
+		public void clearErrors() {
+		}
+
 		public void addClaimMapping() {
 			editClaimMapping(null);
 		}
@@ -596,7 +581,7 @@ public class ScopeGridPane extends VLayout implements EditablePane<OAuthAuthoriz
 
 	}
 
-	private static class ClaimMappingEditDialog extends AbstractWindow {
+	private static class ClaimMappingEditDialog extends MtpDialog {
 
 		private DynamicForm form;
 
@@ -609,40 +594,22 @@ public class ScopeGridPane extends VLayout implements EditablePane<OAuthAuthoriz
 		public ClaimMappingEditDialog() {
 
 			setHeight(250);
-			setWidth(500);
-			setTitle("Scope");
-
-			setShowMinimizeButton(false);
-			setShowMaximizeButton(false);
-			setCanDragResize(true);
-			setIsModal(true);
-			setShowModalMask(true);
-
+			setTitle("Claim Mapping");
 			centerInPage();
 
-			form = new DynamicForm();
-			form.setWidth100();
-			form.setNumCols(3);	//間延びしないように最後に１つ余分に作成
-			form.setColWidths(100, 300, "*");
-			form.setMargin(5);
+			form = new MtpForm();
 
-			txtClaimName = new TextItem();
+			txtClaimName = new MtpTextItem();
 			txtClaimName.setTitle("Claim Name");
-			txtClaimName.setWidth("100%");
-			txtClaimName.setBrowserSpellCheck(false);
 			SmartGWTUtil.setRequired(txtClaimName);
 			txtClaimName.setRequired(true);	//TODO 直接指定しないと効かない
 
-			txtUserPropertyName = new TextItem();
+			txtUserPropertyName = new MtpTextItem();
 			txtUserPropertyName.setTitle("User Property Name");
-			txtUserPropertyName.setWidth("100%");
-			txtUserPropertyName.setBrowserSpellCheck(false);
 
-			txaCustomValueScript = new TextAreaItem();
+			txaCustomValueScript = new MtpTextAreaItem();
 			txaCustomValueScript.setTitle("Custom Value Script");
-			txaCustomValueScript.setWidth("100%");
 			txaCustomValueScript.setHeight(55);
-			txaCustomValueScript.setBrowserSpellCheck(false);
 			SmartGWTUtil.setReadOnlyTextArea(txaCustomValueScript);
 
 			SpacerItem spacer = new SpacerItem();
@@ -680,17 +647,7 @@ public class ScopeGridPane extends VLayout implements EditablePane<OAuthAuthoriz
 
 			form.setItems(txtClaimName, txtUserPropertyName, txaCustomValueScript, spacer, btnCustomValueScript);
 
-			VLayout contents = new VLayout(5);
-			contents.setHeight100();
-			contents.setOverflow(Overflow.AUTO);
-			contents.setMembers(form);
-
-			HLayout footer = new HLayout(5);
-			footer.setMargin(10);
-			footer.setAutoHeight();
-			footer.setWidth100();
-			footer.setAlign(VerticalAlignment.CENTER);
-			footer.setOverflow(Overflow.VISIBLE);
+			container.setMembers(form);
 
 			IButton btnOK = new IButton("OK");
 			btnOK.addClickHandler(new ClickHandler() {
@@ -709,11 +666,6 @@ public class ScopeGridPane extends VLayout implements EditablePane<OAuthAuthoriz
 			});
 
 			footer.setMembers(btnOK, btnCancel);
-
-			addItem(contents);
-			addItem(SmartGWTUtil.separator());
-			addItem(footer);
-
 		}
 
 		public void setDefinition(ClaimMappingDefinition definition) {

@@ -45,6 +45,10 @@ import org.iplass.mtp.entity.definition.EntityDefinitionManager;
 import org.iplass.mtp.entity.definition.PropertyDefinition;
 import org.iplass.mtp.entity.definition.properties.AutoNumberProperty;
 import org.iplass.mtp.entity.definition.properties.ReferenceProperty;
+import org.iplass.mtp.entity.query.Query;
+import org.iplass.mtp.entity.query.Select;
+import org.iplass.mtp.entity.query.condition.expr.And;
+import org.iplass.mtp.entity.query.condition.predicate.Equals;
 import org.iplass.mtp.transaction.TransactionManager;
 import org.iplass.mtp.view.generic.EntityViewManager;
 import org.iplass.mtp.view.generic.LoadEntityContext;
@@ -131,7 +135,44 @@ public abstract class RegistrationCommandBase<T extends RegistrationCommandConte
 	 * @return Entity
 	 */
 	protected Entity loadViewEntity(T context, String oid, Long version, String defName, List<String> loadReferences) {
-		return loadEntity(context, oid, version ,defName, new LoadOption(loadReferences), LoadType.VIEW);
+		Entity entity = loadEntity(context, oid, version, defName, new LoadOption(loadReferences), LoadType.VIEW);
+		if (entity != null && loadReferences != null && loadReferences.size() > 0) {
+			for (String refPropName : loadReferences) {
+				// 画面表示に必要な参照先エンティティのプロパティリスト
+				List<String> refEntityProperties = context.getReferenceEntityDisplayProperty(refPropName);
+				if (refEntityProperties != null && refEntityProperties.size() > 0) {
+					Object value = entity.getValue(refPropName);
+					if (value == null) continue;
+					if (value instanceof Entity) {
+						Entity refEntity = (Entity) value;
+						loadReferenceEntityProperties(refEntity, refEntityProperties);
+					} else if (value instanceof Entity[]) {
+						Entity[] refEntities = (Entity[]) value;
+						for (int i = 0; i < refEntities.length; i++) {
+							Entity refEntity = refEntities[i];
+							loadReferenceEntityProperties(refEntity, refEntityProperties);
+						}
+					}
+				}
+			}
+		}
+		return entity;
+	}
+
+	private void loadReferenceEntityProperties(Entity refEntity, List<String> refEntityProperties) {
+		Query q = new Query();
+		for (String refEntityProp : refEntityProperties) {
+			q.select().add(refEntityProp);
+		}
+		q.from(refEntity.getDefinitionName());
+		q.where(new And(new Equals(Entity.OID, refEntity.getOid()), new Equals(Entity.VERSION, refEntity.getVersion())));
+
+		Entity ret = em.searchEntity(q).getFirst();
+		if (ret != null) {
+			for (String refEntityProp : refEntityProperties) {
+				refEntity.setValue(refEntityProp, ret.getValue(refEntityProp));
+			}
+		}
 	}
 
 	/**

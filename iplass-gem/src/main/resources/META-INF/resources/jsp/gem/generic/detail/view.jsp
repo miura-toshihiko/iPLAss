@@ -147,6 +147,11 @@
 <div class="generic_detail detail_view v_<c:out value="<%=className %>"/>">
 <%@include file="../../layout/resource/mediaelementResource.jsp" %>
 <script type="text/javascript">
+function onclick_submit() {
+	var $form = $("#detailForm");
+	$form.append("<input type='hidden' name='fromView' value='true' />");
+	$form.submit();
+}
 function onclick_copy() {
 	var copyTarget = $(":hidden[name='_copyTarget']").val();
 	if (copyTarget == "Both") {

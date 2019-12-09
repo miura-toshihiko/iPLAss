@@ -33,6 +33,6 @@ public abstract class AccessToken {
 	public abstract String getClientId();
 	public abstract long getExpirationTime();//秒
 	public abstract long getIssuedAt();//秒
-	public abstract long getNotbefore();//秒
+	public abstract long getNotBefore();//秒
 	
 }
