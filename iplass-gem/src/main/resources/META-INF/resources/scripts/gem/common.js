@@ -2449,7 +2449,11 @@ function editReference(detailAction, defName, oid, trId, propName, index, viewAc
 					$link.on("click", function() {
 						editReference(detailAction, defName, entity.oid, trId, propName, index, viewAction, rootDefName, viewName, orgPropName);
 					});
-					$link.modalWindow();
+					if ($("body.modal-body").length != 0) {
+						$link.subModalWindow();
+					} else {
+						$link.modalWindow();
+					}
 				}
 			});
 
@@ -2956,7 +2960,11 @@ function addNestRow(rowId, countId, multiplicy, insertTop, rootDefName, viewName
 				$link.click(function() {
 					editReference(action, defName, "", rowId, propName, idx, view, rootDefName, viewName, orgPropName);
 				});
-				$link.modalWindow();
+				if ($("body.modal-body").length != 0) {
+					$link.subModalWindow();
+				} else {
+					$link.modalWindow();
+				}
 			} else if (type[0] == "tableOrder") {
 				//表示順
 				$(".up-icon", $td).on("click", function(){shiftUp(rowId)});
