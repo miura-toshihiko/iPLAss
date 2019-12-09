@@ -76,12 +76,12 @@ public class RememberMeTokenHandler extends AuthTokenHandler {
 	@Override
 	public AuthToken newAuthToken(String userUniqueId, String policyName, AuthTokenInfo tokenInfo) {
 		int tenantId = ExecuteContext.getCurrentContext().getClientTenantId();
-		return new AuthToken(tenantId, getType(), userUniqueId, getService().newTokenString(), getService().newTokenString(), policyName, new Timestamp(System.currentTimeMillis()), null);
+		return new AuthToken(tenantId, getType(), userUniqueId, newSeriesString(), newTokenString(), policyName, new Timestamp(System.currentTimeMillis()), null);
 	}
 
 	@Override
 	public Credential toCredential(AuthToken newToken) {
-		return new RememberMeTokenCredential(newToken.getTokenEncoded());
+		return new RememberMeTokenCredential(newToken.encodeToken());
 	}
 
 }

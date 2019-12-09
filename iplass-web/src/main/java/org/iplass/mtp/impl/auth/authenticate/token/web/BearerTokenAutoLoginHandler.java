@@ -22,18 +22,20 @@ package org.iplass.mtp.impl.auth.authenticate.token.web;
 import javax.servlet.http.HttpServletRequest;
 
 import org.iplass.mtp.ApplicationException;
+import org.iplass.mtp.auth.login.Credential;
 import org.iplass.mtp.auth.login.token.SimpleAuthTokenCredential;
 import org.iplass.mtp.command.RequestContext;
 import org.iplass.mtp.impl.auth.UserContext;
 import org.iplass.mtp.impl.auth.authenticate.AutoLoginHandler;
 import org.iplass.mtp.impl.auth.authenticate.AutoLoginInstruction;
+import org.iplass.mtp.impl.auth.authenticate.token.AuthToken;
+import org.iplass.mtp.impl.auth.authenticate.token.AuthTokenHandler;
+import org.iplass.mtp.impl.auth.authenticate.token.AuthTokenService;
 import org.iplass.mtp.impl.session.Session;
 import org.iplass.mtp.impl.session.SessionService;
-import org.iplass.mtp.impl.web.token.TokenStore;
 import org.iplass.mtp.impl.webapi.rest.RestRequestContext;
 import org.iplass.mtp.spi.ServiceRegistry;
 import org.iplass.mtp.web.WebRequestConstants;
-import org.iplass.mtp.web.actionmapping.ResponseHeader;
 import org.iplass.mtp.webapi.definition.MethodType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,15 +57,30 @@ public class BearerTokenAutoLoginHandler implements AutoLoginHandler {
 	private static final String SESSION_ATTRIBUTE_BEARER_TOKEN ="mtp.auth.token.bearer.encodedToken";
 	
 	private SessionService sessionService = ServiceRegistry.getRegistry().getService(SessionService.class);
+	private AuthTokenHandler authTokenHandler;
 	
 	private boolean rejectAmbiguousRequest;
+	private String authTokenType;
 	
+	public String getAuthTokenType() {
+		return authTokenType;
+	}
+
+	public void setAuthTokenType(String authTokenType) {
+		this.authTokenType = authTokenType;
+		authTokenHandler = ServiceRegistry.getRegistry().getService(AuthTokenService.class).getHandler(authTokenType);
+	}
+
 	public boolean isRejectAmbiguousRequest() {
 		return rejectAmbiguousRequest;
 	}
 
 	public void setRejectAmbiguousRequest(boolean rejectAmbiguousRequest) {
 		this.rejectAmbiguousRequest = rejectAmbiguousRequest;
+	}
+	
+	public void setAuthTokenHandler(AuthTokenHandler authTokenHandler) {
+		this.authTokenHandler = authTokenHandler;
 	}
 
 	private boolean isForm(HttpServletRequest sr, RestRequestContext rrc) {
@@ -100,44 +117,57 @@ public class BearerTokenAutoLoginHandler implements AutoLoginHandler {
 	
 	@Override
 	public AutoLoginInstruction handle(RequestContext req, boolean isLogined, UserContext user) {
-		if (!(req instanceof RestRequestContext)) {
-			return AutoLoginInstruction.THROUGH;
-		}
-		
 		if (isLogined) {
-			String token = tokenFromRequest(req);
-			if (token == null) {
+			//WebAPIに限定
+			if (!(req instanceof RestRequestContext)) {
+				return AutoLoginInstruction.ERROR;
+			}
+			
+			//BearerTokenをサポートしているWebAPIに限定
+			RestRequestContext restReq = (RestRequestContext) req;
+			if (!restReq.supportBearerToken()) {
+				return AutoLoginInstruction.ERROR;
+			}
+			
+			String tokenStr = tokenFromRequest(req);
+			if (tokenStr == null) {
 				return AutoLoginInstruction.THROUGH;
 			}
 			
-			String tokenFromSess = null;
-			Session s = sessionService.getSession(false);
-			if (s != null) {
-				tokenFromSess = (String) s.getAttribute(SESSION_ATTRIBUTE_BEARER_TOKEN);
-			}
-			
-			if (!token.equals(tokenFromSess)) {
-				if (rejectAmbiguousRequest) {
+			if (rejectAmbiguousRequest) {
+				String tokenFromSess = null;
+				Session s = sessionService.getSession(false);
+				if (s != null) {
+					tokenFromSess = (String) s.getAttribute(SESSION_ATTRIBUTE_BEARER_TOKEN);
+				}
+				if (!tokenStr.equals(tokenFromSess)) {
 					//セッション上のトークンと、リクエストトークンが等しくないならエラー400
 					throw new AuthorizationRequiredException(BearerTokenAutoLoginHandler.AUTH_SCHEME_BEARER, null, AuthorizationRequiredException.CODE_INVALID_REQUEST, "another login session is avaliable");
-				} else {
-					if (logger.isDebugEnabled()) {
-						logger.debug("login session is avaliable, but another bearer token is specified. current session:" + tokenFromSess + ", request header:" + token);
-					} else {
-						logger.warn("login session is avaliable, but another bearer token is specified.");
-					}
 				}
+			} else {
+				AuthToken token = new AuthToken(tokenStr);
+				logger.warn("login session is avaliable, but another bearer token is specified. currentUser:" + user.getAccount().getUnmodifiableUniqueKey() + ", token:" + token.getType() + "." + token.getSeries() + "...");
 			}
+			
 			return AutoLoginInstruction.THROUGH;
 		} else {
-			String token = tokenFromRequest(req);
-			if (token == null) {
+			if (!(req instanceof RestRequestContext)) {
 				return AutoLoginInstruction.THROUGH;
 			}
 			
-			//TODO Credential type to configurable
-			SimpleAuthTokenCredential cre = new SimpleAuthTokenCredential(token);
+			String tokenStr = tokenFromRequest(req);
+			if (tokenStr == null) {
+				return AutoLoginInstruction.THROUGH;
+			}
 			
+			AuthToken token = new AuthToken(tokenStr);
+			
+			
+			if (!authTokenHandler.getType().equals(token.getType())) {
+				return AutoLoginInstruction.THROUGH;
+			}
+			
+			Credential cre = authTokenHandler.toCredential(token);
 			return new AutoLoginInstruction(cre);
 		}
 	}
@@ -149,11 +179,6 @@ public class BearerTokenAutoLoginHandler implements AutoLoginHandler {
 			Session s = sessionService.getSession(false);
 			if (s != null) {
 				s.setAttribute(SESSION_ATTRIBUTE_BEARER_TOKEN, ((SimpleAuthTokenCredential) ali.getCredential()).getToken());
-				
-				//transaction token を返却
-				String token = TokenStore.getFixedToken(req.getSession());
-				ResponseHeader res = (ResponseHeader) req.getAttribute(WebRequestConstants.RESPONSE_HEADER);
-				res.setHeader(TokenStore.TOKEN_HEADER_NAME, token);
 			}
 		}
 	}
