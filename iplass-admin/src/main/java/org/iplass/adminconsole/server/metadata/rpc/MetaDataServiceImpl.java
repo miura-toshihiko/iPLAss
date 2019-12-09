@@ -59,6 +59,8 @@ import org.iplass.mtp.async.AsyncTaskFuture;
 import org.iplass.mtp.async.AsyncTaskInfo;
 import org.iplass.mtp.async.AsyncTaskInfoSearchCondtion;
 import org.iplass.mtp.async.AsyncTaskManager;
+import org.iplass.mtp.auth.login.Credential;
+import org.iplass.mtp.auth.login.IdPasswordCredential;
 import org.iplass.mtp.definition.Definition;
 import org.iplass.mtp.definition.DefinitionEntry;
 import org.iplass.mtp.definition.DefinitionInfo;
@@ -86,6 +88,10 @@ import org.iplass.mtp.entity.query.SortSpec.SortType;
 import org.iplass.mtp.impl.async.rdb.RdbQueueService;
 import org.iplass.mtp.impl.auth.AuthService;
 import org.iplass.mtp.impl.auth.authenticate.AuthenticationProvider;
+import org.iplass.mtp.impl.auth.oauth.MetaOAuthClient.OAuthClientRuntime;
+import org.iplass.mtp.impl.auth.oauth.MetaOAuthResourceServer.OAuthResourceServerRuntime;
+import org.iplass.mtp.impl.auth.oauth.OAuthClientService;
+import org.iplass.mtp.impl.auth.oauth.OAuthResourceServerService;
 import org.iplass.mtp.impl.core.TenantContext;
 import org.iplass.mtp.impl.core.TenantContextService;
 import org.iplass.mtp.impl.definition.DefinitionManagerImpl;
@@ -167,6 +173,9 @@ public class MetaDataServiceImpl extends XsrfProtectedServiceServlet implements 
 	private DefinitionService ds = ServiceRegistry.getRegistry().getService(DefinitionService.class);
 	private RdbQueueService rqs = ServiceRegistry.getRegistry().getService(RdbQueueService.class);
 	private GemConfigService gcs = ServiceRegistry.getRegistry().getService(GemConfigService.class);
+
+	private OAuthClientService oacs = ServiceRegistry.getRegistry().getService(OAuthClientService.class);
+	private OAuthResourceServerService oars = ServiceRegistry.getRegistry().getService(OAuthResourceServerService.class);
 
 	/* ---------------------------------------
 	 * 共通
@@ -1909,6 +1918,76 @@ public class MetaDataServiceImpl extends XsrfProtectedServiceServlet implements 
 
 	private static String resourceString(String suffix, Object... arguments) {
 		return AdminResourceBundleUtil.resourceString("MetaDataServiceImpl." + suffix, arguments);
+	}
+
+	/* ---------------------------------------
+	 * OAuth
+	 --------------------------------------- */
+
+	@Override
+	public String generateCredentialOAuthClient(final int tenantId, final String definitionName) {
+		return AuthUtil.authCheckAndInvoke(getServletContext(), this.getThreadLocalRequest(), this.getThreadLocalResponse(), tenantId, new AuthUtil.Callable<String>() {
+
+			@Override
+			public String call() {
+				OAuthClientRuntime runtime = oacs.getRuntimeByName(definitionName);
+				if (runtime != null) {
+					Credential credential = runtime.generateCredential();
+					if (credential != null && credential instanceof IdPasswordCredential) {
+						return ((IdPasswordCredential)credential).getPassword();
+					}
+				}
+				return null;
+			}
+		});
+	}
+
+	@Override
+	public void deleteOldCredentialOAuthClient(final int tenantId, final String definitionName) {
+		AuthUtil.authCheckAndInvoke(getServletContext(), this.getThreadLocalRequest(), this.getThreadLocalResponse(), tenantId, new AuthUtil.Callable<Void>() {
+
+			@Override
+			public Void call() {
+				OAuthClientRuntime runtime = oacs.getRuntimeByName(definitionName);
+				if (runtime != null) {
+					runtime.deleteOldCredential();
+				}
+				return null;
+			}
+		});
+	}
+
+	@Override
+	public String generateCredentialOAuthResourceServer(final int tenantId, final String definitionName) {
+		return AuthUtil.authCheckAndInvoke(getServletContext(), this.getThreadLocalRequest(), this.getThreadLocalResponse(), tenantId, new AuthUtil.Callable<String>() {
+
+			@Override
+			public String call() {
+				OAuthResourceServerRuntime runtime = oars.getRuntimeByName(definitionName);
+				if (runtime != null) {
+					Credential credential = runtime.generateCredential();
+					if (credential != null && credential instanceof IdPasswordCredential) {
+						return ((IdPasswordCredential)credential).getPassword();
+					}
+				}
+				return null;
+			}
+		});
+	}
+
+	@Override
+	public void deleteOldCredentialOAuthResourceServer(final int tenantId, final String definitionName) {
+		AuthUtil.authCheckAndInvoke(getServletContext(), this.getThreadLocalRequest(), this.getThreadLocalResponse(), tenantId, new AuthUtil.Callable<Void>() {
+
+			@Override
+			public Void call() {
+				OAuthResourceServerRuntime runtime = oars.getRuntimeByName(definitionName);
+				if (runtime != null) {
+					runtime.deleteOldCredential();
+				}
+				return null;
+			}
+		});
 	}
 
 }

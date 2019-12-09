@@ -476,4 +476,17 @@ public interface MetaDataService extends XsrfProtectedService {
 	 * @return imageColorList
 	 */
 	public List<String> getImageColorList(int tenantId);
+
+	/* ---------------------------------------
+	 * OAuth
+	 --------------------------------------- */
+
+	public String generateCredentialOAuthClient(final int tenantId, final String definitionName);
+
+	public void deleteOldCredentialOAuthClient(final int tenantId, final String definitionName);
+
+	public String generateCredentialOAuthResourceServer(final int tenantId, final String definitionName);
+
+	public void deleteOldCredentialOAuthResourceServer(final int tenantId, final String definitionName);
+
 }

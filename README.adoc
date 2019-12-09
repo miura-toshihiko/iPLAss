@@ -34,14 +34,14 @@ https://iplass.org/downloads/
 
 gradleでの定義例：
 
- compile 'org.iplass:iplass-gem:3.0.5'
+ compile 'org.iplass:iplass-gem:3.0.6'
 
 mavenでの設定例：
 
  <dependency>
    <groupId>org.iplass</groupId>
    <artifactId>iplass-gem</artifactId>
-   <version>3.0.5</version>
+   <version>3.0.6</version>
    <type>pom</type>
  </dependency>
 
@@ -81,6 +81,10 @@ iplass-admin、iplass-tools-batchから参照されます。
 ### iplass-infinispan
 infinispanアドオンモジュールです。 +
 キャッシュストア、クラスタ間通信基盤としてinfinispanを利用することを可能にします。
+
+### iplass-redis
+Redisアドオンモジュールです。 +
+キャッシュストアとしてRedisを利用することを可能にします。
 
 ## Related repositories
 

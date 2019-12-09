@@ -83,7 +83,7 @@
 		} else {
 			dispValue = convertPropValueToString(p, propValue);
 		}
-		return StringUtil.escapeHtml(dispValue);
+		return dispValue;
 	}
 
 	String convertPropValueToString(PropertyDefinition p, Object propValue) {
@@ -348,7 +348,7 @@ $(function() {
 <%
 		for (BulkUpdatedProperty updatedProp : data.getUpdatedProperties()) {
 			Integer updateNo = updatedProp.getUpdateNo();
-			String updatedPropName = updatedProp.getPropertyName();
+			String updatedPropName = StringUtil.escapeHtml(updatedProp.getPropertyName());
 			PropertyDefinition pd = defMap.get(updatedPropName);
 			PropertyColumn pc = colMap.get(updatedPropName);
 			String updatedPropDispName = TemplateUtil.getMultilingualString(pc.getDisplayLabel(), pc.getLocalizedDisplayLabelList(),
@@ -357,17 +357,17 @@ $(function() {
 			String updatedPropDispValue = "";
 			// 表示値に変更済み
 			if (updatedPropValue instanceof String) {
-				updatedPropDispValue = (String)updatedPropValue;
+				updatedPropDispValue = StringUtil.escapeHtml((String)updatedPropValue);
 			} else {
 				if (pc.getBulkUpdateEditor() instanceof DateRangePropertyEditor || pc.getBulkUpdateEditor() instanceof JoinPropertyEditor) {
-					List<Object> values = (List<Object>) updatedPropValue;
-					String[] tmp = new String[values.size()];
-					for(int i = 0; i < values.size(); i++) {
-						tmp[i] = convertPropValueToString(pd, values.get(i));
+					Map<String, Object> updatedPropsMap = (Map<String, Object>) updatedPropValue;
+					List<String> tmp = new ArrayList<>(updatedPropsMap.size());
+					for(Map.Entry<String, Object> entry : updatedPropsMap.entrySet()) {
+						tmp.add(convertPropValueToString(EntityViewUtil.getPropertyDefinition(entry.getKey(), ed), entry.getValue()));
 					}
-					updatedPropValue = Arrays.toString(tmp);
+					updatedPropValue = tmp.toString();
 				} 
-				updatedPropDispValue = getPropertyDisplayValue(pd, updatedPropValue);
+				updatedPropDispValue = StringUtil.escapeHtml(getPropertyDisplayValue(pd, updatedPropValue));
 			}
 %>
 <tr>
